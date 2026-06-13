@@ -456,6 +456,28 @@ function openEditor(postJSON) {
   document.getElementById('list-view').style.display = 'none';
   document.getElementById('editor-view').style.display = 'block';
 
+  // Init EasyMDE lazily the first time the editor opens (element must be visible)
+  if (!easyMDE) {
+    easyMDE = new EasyMDE({
+      element: document.getElementById('f-content'),
+      spellChecker: false,
+      autosave: { enabled: false },
+      toolbar: [
+        'bold', 'italic', 'strikethrough', '|',
+        'heading-1', 'heading-2', 'heading-3', '|',
+        'unordered-list', 'ordered-list', 'quote', '|',
+        'link', 'image', '|',
+        'preview', 'side-by-side', 'fullscreen', '|',
+        'guide'
+      ],
+      uploadImage: true,
+      imageUploadFunction: async (file, onSuccess, onError) => {
+        try { onSuccess(await uploadImage(file)); }
+        catch (e) { onError(e.message); }
+      },
+    });
+  }
+
   document.getElementById('f-title').value      = post?.title      ?? '';
   document.getElementById('f-slug').value       = post?.slug       ?? '';
   document.getElementById('f-summary').value    = post?.summary    ?? '';
@@ -562,31 +584,7 @@ async function init() {
 
   document.getElementById('user-email').textContent = claims.email || claims.username || '';
 
-  // Init EasyMDE
-  easyMDE = new EasyMDE({
-    element: document.getElementById('f-content'),
-    spellChecker: false,
-    autosave: { enabled: false },
-    toolbar: [
-      'bold', 'italic', 'strikethrough', '|',
-      'heading-1', 'heading-2', 'heading-3', '|',
-      'unordered-list', 'ordered-list', 'quote', '|',
-      'link', 'image', '|',
-      'preview', 'side-by-side', 'fullscreen', '|',
-      'guide'
-    ],
-    uploadImage: true,
-    imageUploadFunction: async (file, onSuccess, onError) => {
-      try {
-        const url = await uploadImage(file);
-        onSuccess(url);
-      } catch (e) {
-        onError(e.message);
-      }
-    },
-  });
-
-  // Wire up buttons
+  // Wire up buttons first — before anything that might throw
   document.getElementById('btn-logout').onclick     = logout;
   document.getElementById('btn-new-post').onclick   = () => openEditor(null);
   document.getElementById('btn-first-post').onclick = () => openEditor(null);
