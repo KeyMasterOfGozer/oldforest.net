@@ -454,7 +454,7 @@ function openEditor(postJSON) {
   currentPost = post || null;
 
   document.getElementById('list-view').style.display = 'none';
-  document.getElementById('editor-view').style.display = '';
+  document.getElementById('editor-view').style.display = 'block';
 
   document.getElementById('f-title').value      = post?.title      ?? '';
   document.getElementById('f-slug').value       = post?.slug       ?? '';
