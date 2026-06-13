@@ -458,24 +458,23 @@ function openEditor(postJSON) {
 
   // Init EasyMDE lazily the first time the editor opens (element must be visible)
   if (!easyMDE) {
-    easyMDE = new EasyMDE({
-      element: document.getElementById('f-content'),
-      spellChecker: false,
-      autosave: { enabled: false },
-      toolbar: [
-        'bold', 'italic', 'strikethrough', '|',
-        'heading-1', 'heading-2', 'heading-3', '|',
-        'unordered-list', 'ordered-list', 'quote', '|',
-        'link', 'image', '|',
-        'preview', 'side-by-side', 'fullscreen', '|',
-        'guide'
-      ],
-      uploadImage: true,
-      imageUploadFunction: async (file, onSuccess, onError) => {
-        try { onSuccess(await uploadImage(file)); }
-        catch (e) { onError(e.message); }
-      },
-    });
+    try {
+      easyMDE = new EasyMDE({
+        element: document.getElementById('f-content'),
+        spellChecker: false,
+        autosave: { enabled: false },
+        toolbar: [
+          'bold', 'italic', 'strikethrough', '|',
+          'heading-1', 'heading-2', 'heading-3', '|',
+          'unordered-list', 'ordered-list', 'quote', '|',
+          'link', 'image', '|',
+          'preview', 'side-by-side', 'fullscreen', '|',
+          'guide'
+        ],
+      });
+    } catch (e) {
+      console.error('EasyMDE init failed:', e);
+    }
   }
 
   document.getElementById('f-title').value      = post?.title      ?? '';
@@ -488,7 +487,8 @@ function openEditor(postJSON) {
   if (post?.postId) {
     loadPostContent(post.slug);
   } else {
-    easyMDE.value('');
+    if (easyMDE) easyMDE.value('');
+    else document.getElementById('f-content').value = '';
   }
 
   // Auto-generate slug from title
@@ -505,9 +505,12 @@ function onTitleInput(e) {
 async function loadPostContent(slug) {
   try {
     const data = await apiFetch(`/v1/posts/${slug}`);
-    easyMDE.value(data.content ?? '');
+    const content = data.content ?? '';
+    if (easyMDE) easyMDE.value(content);
+    else document.getElementById('f-content').value = content;
   } catch {
-    easyMDE.value('');
+    if (easyMDE) easyMDE.value('');
+    else document.getElementById('f-content').value = '';
   }
 }
 
@@ -520,7 +523,7 @@ function collectFormData(status) {
     summary:    document.getElementById('f-summary').value.trim(),
     tags:       document.getElementById('f-tags').value.split(',').map(t => t.trim()).filter(Boolean),
     visibility: document.getElementById('f-visibility').value,
-    content:    easyMDE.value(),
+    content:    easyMDE ? easyMDE.value() : document.getElementById('f-content').value,
     status,
   };
 }
