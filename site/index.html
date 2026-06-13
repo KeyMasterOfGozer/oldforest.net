@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Old Forest</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #f7f5f0;
+      --surface:  #ffffff;
+      --border:   #e2ddd6;
+      --text:     #2c2c2c;
+      --muted:    #7a7060;
+      --accent:   #2d6a4f;
+      --accent2:  #40916c;
+      --members:  #6b4226;
+      --radius:   8px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: Georgia, 'Times New Roman', serif; line-height: 1.7; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent2); text-decoration: underline; }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
+    .header-inner { max-width: 780px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+    .site-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; }
+    .header-right { display: flex; align-items: center; gap: 14px; font-family: -apple-system, sans-serif; font-size: 14px; }
+    #user-email { color: var(--muted); }
+
+    /* ── Buttons ── */
+    button { cursor: pointer; font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 500; border: none; border-radius: var(--radius); padding: 7px 16px; transition: opacity .15s; }
+    button:hover { opacity: .85; }
+    .btn-primary  { background: var(--accent); color: #fff; }
+    .btn-outline  { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+
+    /* ── Main layout ── */
+    main { max-width: 780px; margin: 0 auto; padding: 48px 24px; }
+
+    .page-intro { margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 32px; }
+    .page-intro h1 { font-size: 32px; color: var(--accent); margin-bottom: 8px; }
+    .page-intro p  { color: var(--muted); font-size: 16px; }
+
+    /* ── Post list ── */
+    #posts-list { display: flex; flex-direction: column; gap: 32px; }
+
+    .post-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 32px; }
+    .post-card:hover { border-color: var(--accent2); }
+
+    .post-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); }
+    .badge-members { background: #f5ede8; color: var(--members); border: 1px solid #e8c9b6; border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+    .tag { background: #edf2ee; color: var(--accent); border-radius: 20px; padding: 2px 10px; font-size: 12px; }
+
+    .post-card h2 { font-size: 22px; margin-bottom: 8px; line-height: 1.35; }
+    .post-card h2 a { color: var(--text); }
+    .post-card h2 a:hover { color: var(--accent); text-decoration: none; }
+    .post-summary { color: var(--muted); font-size: 15px; line-height: 1.6; }
+
+    .members-gate-inline { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-family: -apple-system, sans-serif; font-size: 13px; }
+
+    /* ── States ── */
+    .loading { text-align: center; padding: 60px 0; color: var(--muted); font-family: -apple-system, sans-serif; }
+    .empty   { text-align: center; padding: 60px 0; color: var(--muted); }
+    .empty h3 { font-size: 20px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="site-title" href="/">🌲 Old Forest</a>
+    <div class="header-right">
+      <span id="user-email"></span>
+      <button class="btn-outline" id="btn-auth">Sign in</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="page-intro">
+    <h1>Old Forest</h1>
+    <p>Stories and reflections from the woods.</p>
+  </div>
+  <div id="posts-list"><div class="loading">Loading…</div></div>
+</main>
+
+<script>
+'use strict';
+
+const CFG = {
+  cognitoDomain:  'auth-165395066552.auth.us-east-1.amazoncognito.com',
+  clientId:       '3ri08qut6b7db1n0j9317equ5e',
+  redirectUri:    'https://oldforest.net/index.html',
+  apiBase:        'https://icqes4ud42.execute-api.us-east-1.amazonaws.com',
+};
+
+let accessToken = null;
+
+// ── PKCE ──────────────────────────────────────
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function generatePKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+
+// ── AUTH ──────────────────────────────────────
+async function login() {
+  const { verifier, challenge } = await generatePKCE();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('return_to', window.location.href);
+  const p = new URLSearchParams({
+    response_type: 'code', client_id: CFG.clientId,
+    redirect_uri: CFG.redirectUri, scope: 'openid email profile',
+    code_challenge_method: 'S256', code_challenge: challenge,
+  });
+  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
+}
+
+function logout() {
+  accessToken = null;
+  sessionStorage.clear();
+  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
+  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
+}
+
+async function exchangeCode(code) {
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code', client_id: CFG.clientId,
+      redirect_uri: CFG.redirectUri, code, code_verifier: verifier,
+    }),
+  });
+  if (!res.ok) throw new Error('Token exchange failed');
+  return res.json();
+}
+
+function parseJWT(token) {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+  catch { return {}; }
+}
+
+// ── API ───────────────────────────────────────
+async function fetchPosts() {
+  const res = await fetch(`${CFG.apiBase}/v1/posts`);
+  if (!res.ok) throw new Error('Failed to load posts');
+  const data = await res.json();
+  return data.posts ?? [];
+}
+
+// ── RENDER ────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function isMemberUser() {
+  if (!accessToken) return false;
+  const groups = parseJWT(accessToken)['cognito:groups'] ?? [];
+  return groups.includes('members') || groups.includes('editors');
+}
+
+function renderPosts(posts) {
+  const el = document.getElementById('posts-list');
+  if (!posts.length) {
+    el.innerHTML = '<div class="empty"><h3>No posts yet</h3><p>Check back soon.</p></div>';
+    return;
+  }
+  const member = isMemberUser();
+  posts.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+  el.innerHTML = posts.map(p => {
+    const isMembersOnly = p.visibility === 'members';
+    const canRead = !isMembersOnly || member;
+    const tags = (p.tags ?? []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
+    const gate = (!canRead)
+      ? `<div class="members-gate-inline">🔒 Members only — <button class="btn-primary" onclick="login()">Sign in to read</button></div>`
+      : '';
+    const titleLink = canRead
+      ? `<a href="/post.html?slug=${esc(p.slug)}">${esc(p.title || 'Untitled')}</a>`
+      : esc(p.title || 'Untitled');
+
+    return `
+      <article class="post-card">
+        <div class="post-meta">
+          <span>${fmtDate(p.createdAt)}</span>
+          ${p.author ? `<span>·</span><span>${esc(p.author)}</span>` : ''}
+          ${isMembersOnly ? '<span class="badge-members">Members</span>' : ''}
+          ${tags}
+        </div>
+        <h2>${titleLink}</h2>
+        ${p.summary ? `<p class="post-summary">${esc(p.summary)}</p>` : ''}
+        ${gate}
+      </article>
+    `;
+  }).join('');
+}
+
+// ── INIT ──────────────────────────────────────
+async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+
+  if (code) {
+    history.replaceState({}, '', window.location.pathname);
+    try {
+      const tokens = await exchangeCode(code);
+      accessToken = tokens.access_token;
+      sessionStorage.setItem('access_token', tokens.access_token);
+      const returnTo = sessionStorage.getItem('return_to');
+      sessionStorage.removeItem('return_to');
+      if (returnTo && returnTo !== window.location.href) {
+        window.location.href = returnTo;
+        return;
+      }
+    } catch (e) {
+      console.error('Login failed', e);
+    }
+  } else {
+    accessToken = sessionStorage.getItem('access_token');
+  }
+
+  // Update header
+  const btnAuth = document.getElementById('btn-auth');
+  const userEmail = document.getElementById('user-email');
+  if (accessToken) {
+    const claims = parseJWT(accessToken);
+    userEmail.textContent = claims.email || '';
+    btnAuth.textContent = 'Sign out';
+    btnAuth.onclick = logout;
+  } else {
+    btnAuth.textContent = 'Sign in';
+    btnAuth.onclick = login;
+  }
+
+  try {
+    const posts = await fetchPosts();
+    renderPosts(posts);
+  } catch (e) {
+    document.getElementById('posts-list').innerHTML =
+      '<div class="loading">Failed to load posts. Please try again.</div>';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

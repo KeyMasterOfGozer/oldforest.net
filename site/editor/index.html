@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>oldforest — Editor</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/easymde/2.18.0/easymde.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #1a1c1e;
+      --surface:  #23262a;
+      --border:   #333740;
+      --text:     #dde1e7;
+      --muted:    #8a919e;
+      --accent:   #4caf78;
+      --danger:   #e05c5c;
+      --radius:   6px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; min-height: 100vh; }
+
+    /* ── Layout ── */
+    header { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+    header h1 { font-size: 17px; font-weight: 600; color: var(--accent); letter-spacing: .5px; }
+    #user-info { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ── Buttons ── */
+    button { cursor: pointer; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 500; padding: 7px 16px; transition: opacity .15s; }
+    button:hover { opacity: .85; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary  { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger   { background: var(--danger); color: #fff; }
+    .btn-ghost    { background: transparent; color: var(--muted); padding: 7px 10px; }
+    .btn-ghost:hover { color: var(--text); opacity: 1; }
+
+    /* ── Post list ── */
+    #list-view h2 { font-size: 20px; margin-bottom: 20px; }
+    .list-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: var(--surface); }
+    .post-title { font-weight: 500; }
+    .post-slug  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+    .badge-published { background: #1e3a2a; color: var(--accent); }
+    .badge-draft     { background: #2e2e1e; color: #c8b450; }
+    .badge-public    { background: #1e2a3a; color: #6aabdf; }
+    .badge-members   { background: #2e1e3a; color: #b07ada; }
+    .row-actions { display: flex; gap: 8px; }
+
+    .empty-state { text-align: center; padding: 60px 0; color: var(--muted); }
+    .empty-state p { margin-bottom: 16px; }
+
+    /* ── Editor form ── */
+    #editor-view { display: none; }
+    .editor-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+    .editor-actions { display: flex; gap: 10px; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    input, textarea, select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 14px;
+      padding: 9px 12px;
+      width: 100%;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 70px; }
+    select option { background: var(--surface); }
+
+    .toggles { display: flex; gap: 20px; margin-bottom: 16px; }
+    .toggle-group { display: flex; align-items: center; gap: 10px; }
+    .toggle-group label { text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 400; color: var(--text); margin-bottom: 0; }
+    .toggle-group select { width: auto; }
+
+    /* EasyMDE overrides */
+    .editor-wrapper { margin-bottom: 16px; }
+    .CodeMirror { background: var(--surface) !important; color: var(--text) !important; border: 1px solid var(--border) !important; border-top: none !important; border-radius: 0 0 var(--radius) var(--radius) !important; }
+    .editor-toolbar { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: var(--radius) var(--radius) 0 0 !important; }
+    .editor-toolbar button { background: transparent !important; border: none !important; color: var(--muted) !important; }
+    .editor-toolbar button:hover, .editor-toolbar button.active { color: var(--accent) !important; background: transparent !important; }
+    .editor-toolbar i.separator { border-color: var(--border) !important; }
+    .editor-preview { background: var(--surface) !important; color: var(--text) !important; }
+    .editor-preview pre { background: var(--bg) !important; }
+
+    /* ── Notification ── */
+    #toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 500; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 9999; }
+    #toast.show { opacity: 1; }
+    #toast.success { background: #1e3a2a; color: var(--accent); border: 1px solid var(--accent); }
+    #toast.error   { background: #3a1e1e; color: var(--danger); border: 1px solid var(--danger); }
+
+    /* ── Loading ── */
+    #loading { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--muted); }
+
+    /* ── Auth screen ── */
+    #auth-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 80vh; gap: 16px; }
+    #auth-screen h2 { font-size: 22px; }
+    #auth-screen p  { color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🌲 oldforest editor</h1>
+  <div id="user-info">
+    <span id="user-email"></span>
+    <button class="btn-secondary" id="btn-logout">Logout</button>
+  </div>
+</header>
+
+<main>
+  <!-- Auth screen -->
+  <div id="auth-screen">
+    <h2>Sign in to continue</h2>
+    <p>You need an editor account to access this page.</p>
+    <button class="btn-primary" id="btn-login">Sign in with Cognito</button>
+  </div>
+
+  <!-- Post list -->
+  <div id="list-view">
+    <div class="list-toolbar">
+      <h2>Posts</h2>
+      <button class="btn-primary" id="btn-new-post">+ New Post</button>
+    </div>
+    <div id="loading">Loading posts…</div>
+    <table id="posts-table" style="display:none">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Status</th>
+          <th>Visibility</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="posts-tbody"></tbody>
+    </table>
+    <div id="empty-state" class="empty-state" style="display:none">
+      <p>No posts yet.</p>
+      <button class="btn-primary" id="btn-first-post">Write your first post</button>
+    </div>
+  </div>
+
+  <!-- Editor -->
+  <div id="editor-view">
+    <div class="editor-toolbar">
+      <button class="btn-ghost" id="btn-back">← Back to posts</button>
+      <div class="editor-actions">
+        <button class="btn-secondary" id="btn-save-draft">Save Draft</button>
+        <button class="btn-primary" id="btn-publish">Publish</button>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-group full">
+        <label for="f-title">Title</label>
+        <input id="f-title" type="text" placeholder="Post title">
+      </div>
+      <div class="form-group">
+        <label for="f-slug">Slug</label>
+        <input id="f-slug" type="text" placeholder="post-slug">
+      </div>
+      <div class="form-group">
+        <label for="f-tags">Tags (comma-separated)</label>
+        <input id="f-tags" type="text" placeholder="nature, hiking, forest">
+      </div>
+      <div class="form-group full">
+        <label for="f-summary">Summary</label>
+        <textarea id="f-summary" placeholder="Short excerpt shown in post listings…"></textarea>
+      </div>
+    </div>
+
+    <div class="toggles">
+      <div class="toggle-group">
+        <label for="f-visibility">Visibility</label>
+        <select id="f-visibility">
+          <option value="public">Public</option>
+          <option value="members">Members only</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="editor-wrapper">
+      <textarea id="f-content"></textarea>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/easymde/2.18.0/easymde.min.js"></script>
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────
+//  CONFIG  — update if resources are redeployed
+// ─────────────────────────────────────────────
+const CFG = {
+  cognitoDomain:  'auth-165395066552.auth.us-east-1.amazoncognito.com',
+  clientId:       '3ri08qut6b7db1n0j9317equ5e',
+  redirectUri:    'https://oldforest.net/editor/index.html',
+  apiBase:        'https://icqes4ud42.execute-api.us-east-1.amazonaws.com',
+  imagePublicBase: 'https://oldforest.net/images',
+};
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let accessToken = null;
+let currentPost = null;  // null = new post
+let easyMDE = null;
+
+// ─────────────────────────────────────────────
+//  PKCE HELPERS
+// ─────────────────────────────────────────────
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function generatePKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+
+// ─────────────────────────────────────────────
+//  AUTH
+// ─────────────────────────────────────────────
+async function login() {
+  const { verifier, challenge } = await generatePKCE();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: CFG.clientId,
+    redirect_uri: CFG.redirectUri,
+    scope: 'openid email profile',
+    code_challenge_method: 'S256',
+    code_challenge: challenge,
+  });
+  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${params}`;
+}
+
+function logout() {
+  accessToken = null;
+  sessionStorage.clear();
+  const params = new URLSearchParams({
+    client_id: CFG.clientId,
+    logout_uri: CFG.redirectUri,
+  });
+  window.location.href = `https://${CFG.cognitoDomain}/logout?${params}`;
+}
+
+async function exchangeCode(code) {
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  if (!verifier) throw new Error('No PKCE verifier found');
+  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: CFG.clientId,
+      redirect_uri: CFG.redirectUri,
+      code,
+      code_verifier: verifier,
+    }),
+  });
+  if (!res.ok) throw new Error('Token exchange failed');
+  const data = await res.json();
+  sessionStorage.removeItem('pkce_verifier');
+  return data;
+}
+
+function parseJWT(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch { return {}; }
+}
+
+// ─────────────────────────────────────────────
+//  API
+// ─────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${CFG.apiBase}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function fetchPosts() {
+  const data = await apiFetch('/v1/editor/posts');
+  return data.posts ?? [];
+}
+
+async function fetchPost(postId) {
+  // Get metadata from list, content from get-post endpoint
+  const slug = currentPost?.slug;
+  if (!slug) return null;
+  return apiFetch(`/v1/posts/${slug}`);
+}
+
+async function savePost(fields) {
+  if (currentPost) {
+    return apiFetch(`/v1/editor/posts/${currentPost.postId}`, {
+      method: 'PUT',
+      body: JSON.stringify(fields),
+    });
+  } else {
+    return apiFetch('/v1/editor/posts', {
+      method: 'POST',
+      body: JSON.stringify(fields),
+    });
+  }
+}
+
+async function deletePost(postId) {
+  return apiFetch(`/v1/editor/posts/${postId}`, { method: 'DELETE' });
+}
+
+async function uploadImage(file) {
+  const { uploadUrl, key } = await apiFetch('/v1/editor/upload', {
+    method: 'POST',
+    body: JSON.stringify({ filename: file.name, contentType: file.type }),
+  });
+  await fetch(uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type },
+  });
+  return `${CFG.imagePublicBase}/${key.replace('images/', '')}`;
+}
+
+// ─────────────────────────────────────────────
+//  TOAST
+// ─────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ─────────────────────────────────────────────
+//  SLUG HELPER
+// ─────────────────────────────────────────────
+function slugify(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// ─────────────────────────────────────────────
+//  UI — POST LIST
+// ─────────────────────────────────────────────
+function showListView() {
+  document.getElementById('list-view').style.display = '';
+  document.getElementById('editor-view').style.display = 'none';
+  currentPost = null;
+  loadPosts();
+}
+
+async function loadPosts() {
+  const loading = document.getElementById('loading');
+  const table   = document.getElementById('posts-table');
+  const empty   = document.getElementById('empty-state');
+  loading.style.display = '';
+  table.style.display = 'none';
+  empty.style.display = 'none';
+
+  try {
+    const posts = await fetchPosts();
+    loading.style.display = 'none';
+
+    if (!posts.length) {
+      empty.style.display = '';
+      return;
+    }
+
+    posts.sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
+    const tbody = document.getElementById('posts-tbody');
+    tbody.innerHTML = posts.map(p => `
+      <tr>
+        <td>
+          <div class="post-title">${esc(p.title || '(untitled)')}</div>
+          <div class="post-slug">${esc(p.slug || '')}</div>
+        </td>
+        <td><span class="badge badge-${p.status}">${esc(p.status)}</span></td>
+        <td><span class="badge badge-${p.visibility}">${esc(p.visibility)}</span></td>
+        <td style="color:var(--muted);font-size:13px">${fmtDate(p.updatedAt || p.createdAt)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn-secondary" onclick="openEditor(${JSON.stringify(JSON.stringify(p))})">Edit</button>
+            <button class="btn-danger"    onclick="confirmDelete('${esc(p.postId)}', '${esc(p.title || 'this post')}')">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+    table.style.display = '';
+  } catch (e) {
+    loading.style.display = 'none';
+    toast(`Failed to load posts: ${e.message}`, 'error');
+  }
+}
+
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+async function confirmDelete(postId, title) {
+  if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+  try {
+    await deletePost(postId);
+    toast('Post deleted');
+    loadPosts();
+  } catch (e) {
+    toast(`Delete failed: ${e.message}`, 'error');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  UI — EDITOR
+// ─────────────────────────────────────────────
+function openEditor(postJSON) {
+  const post = typeof postJSON === 'string' ? JSON.parse(postJSON) : postJSON;
+  currentPost = post || null;
+
+  document.getElementById('list-view').style.display = 'none';
+  document.getElementById('editor-view').style.display = '';
+
+  document.getElementById('f-title').value      = post?.title      ?? '';
+  document.getElementById('f-slug').value       = post?.slug       ?? '';
+  document.getElementById('f-summary').value    = post?.summary    ?? '';
+  document.getElementById('f-tags').value       = (post?.tags ?? []).join(', ');
+  document.getElementById('f-visibility').value = post?.visibility ?? 'public';
+
+  // Load content if editing existing post
+  if (post?.postId) {
+    loadPostContent(post.slug);
+  } else {
+    easyMDE.value('');
+  }
+
+  // Auto-generate slug from title
+  document.getElementById('f-title').addEventListener('input', onTitleInput);
+}
+
+function onTitleInput(e) {
+  const slugField = document.getElementById('f-slug');
+  if (!currentPost) {
+    slugField.value = slugify(e.target.value);
+  }
+}
+
+async function loadPostContent(slug) {
+  try {
+    const data = await apiFetch(`/v1/posts/${slug}`);
+    easyMDE.value(data.content ?? '');
+  } catch {
+    easyMDE.value('');
+  }
+}
+
+function collectFormData(status) {
+  const title = document.getElementById('f-title').value.trim();
+  const slug  = document.getElementById('f-slug').value.trim() || slugify(title);
+  return {
+    title,
+    slug,
+    summary:    document.getElementById('f-summary').value.trim(),
+    tags:       document.getElementById('f-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+    visibility: document.getElementById('f-visibility').value,
+    content:    easyMDE.value(),
+    status,
+  };
+}
+
+async function handleSave(status) {
+  const btn = status === 'published' ? document.getElementById('btn-publish') : document.getElementById('btn-save-draft');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const data = collectFormData(status);
+    if (!data.title) { toast('Title is required', 'error'); return; }
+    const result = await savePost(data);
+    if (!currentPost) currentPost = result;  // update with server-assigned postId
+    toast(status === 'published' ? 'Published!' : 'Draft saved');
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = status === 'published' ? 'Publish' : 'Save Draft';
+  }
+}
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+async function init() {
+  // Check for OAuth callback code
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+
+  if (code) {
+    history.replaceState({}, '', window.location.pathname);
+    try {
+      const tokens = await exchangeCode(code);
+      accessToken = tokens.access_token;
+      sessionStorage.setItem('access_token', tokens.access_token);
+      sessionStorage.setItem('id_token', tokens.id_token);
+    } catch (e) {
+      toast(`Login failed: ${e.message}`, 'error');
+      showAuthScreen();
+      return;
+    }
+  } else {
+    // Restore token from session
+    accessToken = sessionStorage.getItem('access_token');
+  }
+
+  if (!accessToken) {
+    showAuthScreen();
+    return;
+  }
+
+  // Verify editor group membership
+  const claims = parseJWT(accessToken);
+  const groups = claims['cognito:groups'] ?? [];
+  if (!groups.includes('editors')) {
+    toast('Your account does not have editor access.', 'error');
+    showAuthScreen();
+    return;
+  }
+
+  document.getElementById('user-email').textContent = claims.email || claims.username || '';
+
+  // Init EasyMDE
+  easyMDE = new EasyMDE({
+    element: document.getElementById('f-content'),
+    spellChecker: false,
+    autosave: { enabled: false },
+    toolbar: [
+      'bold', 'italic', 'strikethrough', '|',
+      'heading-1', 'heading-2', 'heading-3', '|',
+      'unordered-list', 'ordered-list', 'quote', '|',
+      'link', 'image', '|',
+      'preview', 'side-by-side', 'fullscreen', '|',
+      'guide'
+    ],
+    uploadImage: true,
+    imageUploadFunction: async (file, onSuccess, onError) => {
+      try {
+        const url = await uploadImage(file);
+        onSuccess(url);
+      } catch (e) {
+        onError(e.message);
+      }
+    },
+  });
+
+  // Wire up buttons
+  document.getElementById('btn-logout').onclick     = logout;
+  document.getElementById('btn-new-post').onclick   = () => openEditor(null);
+  document.getElementById('btn-first-post').onclick = () => openEditor(null);
+  document.getElementById('btn-back').onclick       = showListView;
+  document.getElementById('btn-save-draft').onclick = () => handleSave('draft');
+  document.getElementById('btn-publish').onclick    = () => handleSave('published');
+
+  showListView();
+}
+
+function showAuthScreen() {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('list-view').style.display   = 'none';
+  document.getElementById('editor-view').style.display = 'none';
+  document.getElementById('btn-login').onclick = login;
+}
+
+init();
+</script>
+</body>
+</html>

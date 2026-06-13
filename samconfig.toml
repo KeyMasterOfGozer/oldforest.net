@@ -1,0 +1,25 @@
+# SAM CLI configuration
+# Run: sam deploy --config-env default
+# Or override profile: sam deploy --profile <name>
+
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "oldforest-net"
+region     = "us-east-1"
+profile    = "oldforest"   # AWS CLI named profile to use
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+capabilities        = "CAPABILITY_IAM"
+confirm_changeset   = true
+resolve_s3          = true
+s3_prefix           = "oldforest-net"
+parameter_overrides = [
+  "DomainName=oldforest.net",
+  "AcmCertificateArn=arn:aws:acm:us-east-1:165395066552:certificate/69fbcfee-7953-498e-8a62-6bac50e98138"
+]

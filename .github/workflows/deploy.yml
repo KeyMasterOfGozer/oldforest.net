@@ -1,0 +1,75 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python (required by SAM CLI)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install SAM CLI
+        run: pip install aws-sam-cli
+
+      # ── Option A: OIDC (preferred, no stored secrets) ──────────────────
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+      # ────────────────────────────────────────────────────────────────────
+      # Option B: Named profile (uncomment if not using OIDC)
+      # - name: Write AWS credentials
+      #   run: |
+      #     mkdir -p ~/.aws
+      #     printf '[oldforest]\naws_access_key_id=%s\naws_secret_access_key=%s\n' \
+      #       "${{ secrets.AWS_ACCESS_KEY_ID }}" \
+      #       "${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> ~/.aws/credentials
+      # ────────────────────────────────────────────────────────────────────
+
+      - name: SAM build
+        run: sam build --parallel
+
+      - name: SAM deploy
+        run: |
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+        # Profile flag for Option B: add --profile oldforest
+
+      - name: Sync site to S3
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name oldforest-net \
+            --query "Stacks[0].Outputs[?OutputKey=='SiteBucketName'].OutputValue" \
+            --output text)
+          aws s3 sync ./site s3://$BUCKET --delete
+        # Add --profile oldforest for Option B
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DIST=$(aws cloudformation describe-stacks \
+            --stack-name oldforest-net \
+            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDomain'].OutputValue" \
+            --output text)
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?DomainName=='$DIST'].Id" \
+            --output text)
+          aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
+        # Add --profile oldforest for Option B
