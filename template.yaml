@@ -446,6 +446,8 @@ Outputs:
     Value: !Ref UserPoolClient
   CloudFrontDomain:
     Value: !GetAtt CloudFrontDistribution.DomainName
+  CloudFrontDistributionId:
+    Value: !Ref CloudFrontDistribution
   SiteBucketName:
     Value: !Ref SiteBucket
   ContentBucketName:
