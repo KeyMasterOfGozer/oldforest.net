@@ -19,11 +19,18 @@ export const handler = async (event) => {
   const post = result.Items?.[0];
   if (!post) return { statusCode: 404, body: JSON.stringify({ message: 'Not found' }) };
 
+  const claims = event.requestContext?.authorizer?.jwt?.claims;
+  const groups = claims?.['cognito:groups'] ?? [];
+  const isMember = groups.includes('members') || groups.includes('editors');
+  const isAuthor = claims?.sub && claims.sub === post.authorSub;
+
   // Enforce visibility
-  if (post.visibility === 'members') {
-    const claims = event.requestContext?.authorizer?.jwt?.claims;
-    const groups = claims?.['cognito:groups'] ?? [];
-    if (!groups.includes('members') && !groups.includes('editors')) {
+  if (post.visibility === 'personal') {
+    if (!isAuthor) {
+      return { statusCode: 403, body: JSON.stringify({ message: 'Personal post' }) };
+    }
+  } else if (post.visibility === 'members') {
+    if (!isMember) {
       return { statusCode: 403, body: JSON.stringify({ message: 'Members only' }) };
     }
   }

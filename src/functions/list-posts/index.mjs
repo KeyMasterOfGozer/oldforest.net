@@ -8,14 +8,20 @@ export const handler = async (event) => {
   const groups = claims?.['cognito:groups'] ?? [];
   const isEditor = groups.includes('editors');
   const isEditorPath = event.rawPath?.startsWith('/v1/editor');
+  const currentSub = claims?.sub;
 
-  // Editor list: return all posts (all statuses + visibility)
+  // Editor list: all posts, but personal posts only from the current user
   if (isEditorPath) {
     if (!isEditor) {
       return { statusCode: 403, body: JSON.stringify({ message: 'Editors only' }) };
     }
     const result = await client.send(new ScanCommand({
       TableName: process.env.POSTS_TABLE,
+      FilterExpression: 'visibility <> :personal OR authorSub = :sub',
+      ExpressionAttributeValues: {
+        ':personal': 'personal',
+        ':sub': currentSub,
+      },
       ProjectionExpression: 'postId, slug, title, summary, author, createdAt, updatedAt, #s, visibility, tags',
       ExpressionAttributeNames: { '#s': 'status' },
     }));
@@ -26,13 +32,15 @@ export const handler = async (event) => {
     };
   }
 
-  // Public list: all published posts (both public and members-only).
-  // Content is gated at the post level — showing the title/summary is fine.
+  // Public list: published posts only, never personal
   const result = await client.send(new ScanCommand({
     TableName: process.env.POSTS_TABLE,
-    FilterExpression: '#s = :published',
+    FilterExpression: '#s = :published AND visibility <> :personal',
     ExpressionAttributeNames: { '#s': 'status' },
-    ExpressionAttributeValues: { ':published': 'published' },
+    ExpressionAttributeValues: {
+      ':published': 'published',
+      ':personal': 'personal',
+    },
     ProjectionExpression: 'postId, slug, title, summary, author, createdAt, tags, visibility',
   }));
 

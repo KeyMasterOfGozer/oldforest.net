@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient());
@@ -17,10 +17,20 @@ export const handler = async (event) => {
     return { statusCode: e.statusCode, body: JSON.stringify({ message: e.message }) };
   }
 
+  const claims = event.requestContext.authorizer.jwt.claims;
   const { postId } = event.pathParameters;
   const body = JSON.parse(event.body ?? '{}');
   const now = new Date().toISOString();
   const contentKey = `posts/${postId}/body.md`;
+
+  // For personal posts, only the original author can edit
+  const existing = await dynamo.send(new GetCommand({
+    TableName: process.env.POSTS_TABLE,
+    Key: { postId },
+  }));
+  if (existing.Item?.visibility === 'personal' && existing.Item?.authorSub !== claims.sub) {
+    return { statusCode: 403, body: JSON.stringify({ message: 'Not your personal post' }) };
+  }
 
   if (body.content !== undefined) {
     await s3.send(new PutObjectCommand({

@@ -18,6 +18,7 @@ export const handler = async (event) => {
     return { statusCode: e.statusCode, body: JSON.stringify({ message: e.message }) };
   }
 
+  const claims = event.requestContext.authorizer.jwt.claims;
   const body = JSON.parse(event.body ?? '{}');
   const postId = randomUUID();
   const now = new Date().toISOString();
@@ -36,6 +37,7 @@ export const handler = async (event) => {
     title: body.title,
     summary: body.summary ?? '',
     author: body.author ?? '',
+    authorSub: claims.sub,          // Cognito user ID — used to gate personal posts
     createdAt: now,
     updatedAt: now,
     status: body.status ?? 'draft',
