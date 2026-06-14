@@ -137,17 +137,20 @@ function parseJWT(token) {
   catch { return {}; }
 }
 
-function showAlert(id, message) {
+function showAlert(id, message, persistent) {
   const el = document.getElementById(id);
   if (message) el.textContent = message;
   el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 4000);
+  if (!persistent) setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
 
 // ── Token refresh ─────────────────────────────
 async function refreshTokens() {
   const refreshToken = sessionStorage.getItem('refresh_token');
-  if (!refreshToken) return;
+  if (!refreshToken) {
+    console.warn('[profile] No refresh_token in sessionStorage');
+    return false;
+  }
   try {
     const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
       method: 'POST',
@@ -160,31 +163,62 @@ async function refreshTokens() {
     });
     if (res.ok) {
       const tokens = await res.json();
+      const newClaims = parseJWT(tokens.access_token || '');
+      console.log('[profile] Token refreshed OK | token_use:', newClaims.token_use,
+        '| exp:', newClaims.exp ? new Date(newClaims.exp * 1000).toISOString() : 'n/a',
+        '| access_token present:', !!tokens.access_token);
       sessionStorage.setItem('access_token', tokens.access_token);
       if (tokens.id_token) sessionStorage.setItem('id_token', tokens.id_token);
+      return true;
+    } else {
+      const body = await res.json().catch(() => ({}));
+      console.error('[profile] Token refresh failed:', res.status, body);
+      return false;
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[profile] Token refresh error:', e);
+    return false;
+  }
 }
 
 // ── API helper ────────────────────────────────
 async function apiFetch(path, opts = {}) {
-  const token = sessionStorage.getItem('access_token');
-  const res = await fetch(`${CFG.apiBase}${path}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(opts.headers || {}),
-    },
-  });
-  if (res.status === 401) {
-    // Token expired — clear stale tokens, force fresh login
-    sessionStorage.removeItem('access_token');
-    sessionStorage.removeItem('id_token');
-    sessionStorage.setItem('return_to', window.location.href);
-    window.location.href = '/index.html';
-    throw new Error('Session expired');
+  async function attempt() {
+    const token = sessionStorage.getItem('access_token');
+    const claims = parseJWT(token || '');
+    console.log('[profile] API', opts.method || 'GET', path,
+      '| token_use:', claims.token_use,
+      '| exp:', claims.exp ? new Date(claims.exp * 1000).toISOString() : 'n/a',
+      '| client_id/aud:', claims.client_id || claims.aud || 'n/a');
+    return fetch(`${CFG.apiBase}${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts.headers || {}),
+      },
+    });
   }
+
+  let res = await attempt();
+  console.log('[profile] First attempt status:', res.status);
+
+  if (res.status === 401) {
+    const body401 = await res.json().catch(() => ({}));
+    console.error('[profile] 401 body (first):', JSON.stringify(body401));
+    console.log('[profile] Attempting token refresh…');
+    const ok = await refreshTokens();
+    console.log('[profile] Refresh result:', ok);
+    res = await attempt();
+    console.log('[profile] Retry status:', res.status);
+  }
+
+  if (res.status === 401) {
+    const body401 = await res.json().catch(() => ({}));
+    console.error('[profile] 401 body (after refresh):', JSON.stringify(body401));
+    throw new Error(body401.message || 'Session expired. Please sign out and sign back in.');
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
   return data;
@@ -223,7 +257,7 @@ async function init() {
       document.getElementById('f-name').value = name;
       showAlert('name-success');
     } catch (e) {
-      showAlert('name-error', e.message);
+      showAlert('name-error', e.message, e.message.includes('expired'));
     } finally {
       btn.disabled = false;
       btn.textContent = 'Save';

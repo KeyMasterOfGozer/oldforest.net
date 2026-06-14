@@ -251,7 +251,7 @@ async function login() {
     response_type: 'code',
     client_id: CFG.clientId,
     redirect_uri: CFG.redirectUri,
-    scope: 'openid email profile',
+    scope: 'openid email profile aws.cognito.signin.user.admin',
     code_challenge_method: 'S256',
     code_challenge: challenge,
   });
@@ -593,7 +593,7 @@ async function init() {
   }
 
   const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
-  const displayName = idClaims.name || idClaims.email || claims.username || '';
+  const displayName = idClaims.name || idClaims.email || claims.username || 'My Profile';
   const userEmailEl = document.getElementById('user-email');
   userEmailEl.innerHTML = `<a href="/profile.html" style="color:var(--muted);text-decoration:none;font-size:13px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">${displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</a>`;
 

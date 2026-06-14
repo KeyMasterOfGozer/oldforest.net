@@ -114,10 +114,13 @@ async function generatePKCE() {
 async function login() {
   const { verifier, challenge } = await generatePKCE();
   sessionStorage.setItem('pkce_verifier', verifier);
-  sessionStorage.setItem('return_to', window.location.href);
+  // Only set return_to if not already pointing somewhere specific (e.g. profile page after 401)
+  if (!sessionStorage.getItem('return_to')) {
+    sessionStorage.setItem('return_to', window.location.href);
+  }
   const p = new URLSearchParams({
     response_type: 'code', client_id: CFG.clientId,
-    redirect_uri: CFG.redirectUri, scope: 'openid email profile',
+    redirect_uri: CFG.redirectUri, scope: 'openid email profile aws.cognito.signin.user.admin',
     code_challenge_method: 'S256', code_challenge: challenge,
   });
   window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
@@ -242,7 +245,7 @@ async function init() {
     const claims = parseJWT(accessToken);
     const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
     const groups = claims['cognito:groups'] ?? [];
-    const displayName = idClaims.name || idClaims.email || '';
+    const displayName = idClaims.name || idClaims.email || 'My Profile';
     userEmail.innerHTML = `<a href="/profile.html" style="color:var(--muted);text-decoration:none;font-family:-apple-system,sans-serif;font-size:14px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">${esc(displayName)}</a>`;
     btnAuth.textContent = 'Sign out';
     btnAuth.onclick = logout;
