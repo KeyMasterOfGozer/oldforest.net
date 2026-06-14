@@ -48,8 +48,11 @@
     /* ── Post list ── */
     #posts-list { display: flex; flex-direction: column; gap: 32px; }
 
-    .post-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 32px; }
+    .post-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 32px; display: flex; gap: 24px; align-items: flex-start; }
     .post-card:hover { border-color: var(--accent2); }
+    .post-card-body { flex: 1; min-width: 0; }
+    .post-thumb { width: 160px; height: 110px; object-fit: cover; border-radius: calc(var(--radius) - 2px); flex-shrink: 0; }
+    @media (max-width: 560px) { .post-thumb { display: none; } }
 
     .post-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); }
     .badge-members { background: #2e1808; color: var(--members); border: 1px solid #5a3010; border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
@@ -199,15 +202,18 @@ function renderPosts(posts) {
 
     return `
       <article class="post-card">
-        <div class="post-meta">
-          <span>${fmtDate(p.createdAt)}</span>
-          ${p.author ? `<span>·</span><span>${esc(p.author)}</span>` : ''}
-          ${isMembersOnly ? '<span class="badge-members">Members</span>' : ''}
-          ${tags}
+        <div class="post-card-body">
+          <div class="post-meta">
+            <span>${fmtDate(p.createdAt)}</span>
+            ${p.author ? `<span>·</span><span>${esc(p.author)}</span>` : ''}
+            ${isMembersOnly ? '<span class="badge-members">Members</span>' : ''}
+            ${tags}
+          </div>
+          <h2>${titleLink}</h2>
+          ${p.summary ? `<p class="post-summary">${esc(p.summary)}</p>` : ''}
+          ${gate}
         </div>
-        <h2>${titleLink}</h2>
-        ${p.summary ? `<p class="post-summary">${esc(p.summary)}</p>` : ''}
-        ${gate}
+        ${p.thumbnail ? `<img class="post-thumb" src="${esc(p.thumbnail)}" alt="" loading="lazy">` : ''}
       </article>
     `;
   }).join('');

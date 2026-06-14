@@ -708,6 +708,32 @@ async function init() {
     }
   });
 
+  // ── Thumbnail upload ─────────────────────────
+  document.getElementById('btn-upload-thumb').onclick = () =>
+    document.getElementById('thumb-upload-input').click();
+
+  document.getElementById('thumb-upload-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    const statusEl = document.getElementById('thumb-upload-status');
+    statusEl.textContent = `Uploading…`;
+    try {
+      const url = await uploadImage(file);
+      document.getElementById('f-thumbnail').value = url;
+      updateThumbPreview(url);
+      statusEl.textContent = '';
+      toast('Thumbnail uploaded');
+    } catch (err) {
+      statusEl.textContent = '';
+      toast(`Upload failed: ${err.message}`, 'error');
+    }
+  });
+
+  document.getElementById('f-thumbnail').addEventListener('input', (e) => {
+    updateThumbPreview(e.target.value.trim());
+  });
+
   showListView();
 }
 
