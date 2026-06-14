@@ -238,9 +238,18 @@ async function init() {
   const userEmail = document.getElementById('user-email');
   if (accessToken) {
     const claims = parseJWT(accessToken);
+    const groups = claims['cognito:groups'] ?? [];
     userEmail.textContent = claims.email || '';
     btnAuth.textContent = 'Sign out';
     btnAuth.onclick = logout;
+    if (groups.includes('editors')) {
+      const editorLink = document.createElement('a');
+      editorLink.href = '/editor/index.html';
+      editorLink.textContent = 'Editor';
+      editorLink.style.cssText = 'font-family:-apple-system,sans-serif;font-size:13px;font-weight:500;color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 14px;';
+      document.getElementById('user-info') || document.querySelector('.header-right').insertBefore(editorLink, btnAuth);
+      document.querySelector('.header-right').insertBefore(editorLink, btnAuth);
+    }
   } else {
     btnAuth.textContent = 'Sign in';
     btnAuth.onclick = login;
