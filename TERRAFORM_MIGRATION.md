@@ -69,13 +69,13 @@ aws cloudformation wait stack-delete-complete \
 ```bash
 cd infra
 
-terraform init
+AWS_PROFILE=oldforest terraform init
 
 # Preview what will be created
-terraform plan
+AWS_PROFILE=oldforest terraform plan
 
 # Create all resources
-terraform apply
+AWS_PROFILE=oldforest terraform apply
 ```
 
 After `apply`, note the outputs — especially `api_url`, `user_pool_id`, and `user_pool_client_id`.
@@ -88,7 +88,7 @@ The new Terraform apply creates a **new** API Gateway and Cognito User Pool, so 
 
 ```bash
 cd infra
-terraform output
+AWS_PROFILE=oldforest terraform output
 ```
 
 Update the `CFG` block in these files if the IDs differ from the old stack:
@@ -109,8 +109,8 @@ The values to update are:
 ## 5. Sync site to S3 and invalidate CloudFront
 
 ```bash
-BUCKET=$(cd infra && terraform output -raw site_bucket_name)
-DIST_ID=$(cd infra && terraform output -raw cloudfront_distribution_id)
+BUCKET=$(cd infra && AWS_PROFILE=oldforest terraform output -raw site_bucket_name)
+DIST_ID=$(cd infra && AWS_PROFILE=oldforest terraform output -raw cloudfront_distribution_id)
 
 aws s3 sync ./site s3://$BUCKET --delete --profile oldforest
 aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*" --profile oldforest
@@ -123,7 +123,7 @@ aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*" --pro
 If CloudFront was recreated, get the new domain name:
 
 ```bash
-cd infra && terraform output cloudfront_domain
+cd infra && AWS_PROFILE=oldforest terraform output cloudfront_domain
 ```
 
 Update your Route 53 (or other DNS) A/AAAA alias records for `oldforest.net` and `www.oldforest.net` to point at the new CloudFront domain.
@@ -133,17 +133,17 @@ Update your Route 53 (or other DNS) A/AAAA alias records for `oldforest.net` and
 ## 7. Re-add your user to Cognito groups
 
 ```bash
-USER_POOL_ID=$(cd infra && terraform output -raw user_pool_id)
+USER_POOL_ID=$(cd infra && AWS_PROFILE=oldforest terraform output -raw user_pool_id)
 
 aws cognito-idp admin-add-user-to-group \
   --user-pool-id $USER_POOL_ID \
-  --username mgreene@onevizion.com \
+  --username bombadil@oldforest.net \
   --group-name admins \
   --profile oldforest
 
 aws cognito-idp admin-add-user-to-group \
   --user-pool-id $USER_POOL_ID \
-  --username mgreene@onevizion.com \
+  --username bombadil@oldforest.net \
   --group-name editors \
   --profile oldforest
 ```
