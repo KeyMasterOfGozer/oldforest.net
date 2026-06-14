@@ -223,8 +223,10 @@ async function init() {
   const emailEl  = document.getElementById('user-email');
   if (accessToken) {
     const claims = parseJWT(accessToken);
+    const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
     const groups = claims['cognito:groups'] ?? [];
-    emailEl.textContent = claims.email || '';
+    const displayName = idClaims.name || idClaims.email || '';
+    emailEl.innerHTML = `<a href="/profile.html" style="color:var(--muted);text-decoration:none;font-family:-apple-system,sans-serif;font-size:14px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">${displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</a>`;
     btnAuth.textContent = 'Sign out';
     btnAuth.onclick = logout;
     if (groups.includes('editors')) {

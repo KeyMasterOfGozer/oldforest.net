@@ -591,7 +591,10 @@ async function init() {
     return;
   }
 
-  document.getElementById('user-email').textContent = claims.email || claims.username || '';
+  const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
+  const displayName = idClaims.name || idClaims.email || claims.username || '';
+  const userEmailEl = document.getElementById('user-email');
+  userEmailEl.innerHTML = `<a href="/profile.html" style="color:var(--muted);text-decoration:none;font-size:13px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">${displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</a>`;
 
   // Wire up buttons first — before anything that might throw
   document.getElementById('btn-logout').onclick     = logout;
