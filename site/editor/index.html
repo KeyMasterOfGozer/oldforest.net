@@ -223,6 +223,7 @@ const CFG = {
 let accessToken = null;
 let currentPost = null;  // null = new post
 let easyMDE = null;
+let postsCache = {};     // postId → post object, avoids JSON-in-HTML-attribute issues
 
 // ─────────────────────────────────────────────
 //  PKCE HELPERS
@@ -401,6 +402,8 @@ async function loadPosts() {
     }
 
     posts.sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
+    postsCache = {};
+    posts.forEach(p => postsCache[p.postId] = p);
     const tbody = document.getElementById('posts-tbody');
     tbody.innerHTML = posts.map(p => `
       <tr>
@@ -413,7 +416,7 @@ async function loadPosts() {
         <td style="color:var(--muted);font-size:13px">${fmtDate(p.updatedAt || p.createdAt)}</td>
         <td>
           <div class="row-actions">
-            <button class="btn-secondary" onclick="openEditor(${JSON.stringify(JSON.stringify(p))})">Edit</button>
+            <button class="btn-secondary" onclick="openEditor(postsCache['${esc(p.postId)}'])">Edit</button>
             <button class="btn-danger"    onclick="confirmDelete('${esc(p.postId)}', '${esc(p.title || 'this post')}')">Delete</button>
           </div>
         </td>
@@ -449,8 +452,7 @@ async function confirmDelete(postId, title) {
 // ─────────────────────────────────────────────
 //  UI — EDITOR
 // ─────────────────────────────────────────────
-function openEditor(postJSON) {
-  const post = typeof postJSON === 'string' ? JSON.parse(postJSON) : postJSON;
+function openEditor(post) {
   currentPost = post || null;
 
   document.getElementById('list-view').style.display = 'none';
