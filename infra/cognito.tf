@@ -11,6 +11,12 @@ resource "aws_cognito_user_pool" "main" {
     require_numbers   = true
     require_symbols   = false
   }
+
+  # Enable WebAuthn / passkey support
+  web_authn_configuration {
+    relying_party_id  = var.domain_name   # "oldforest.net"
+    user_verification = "preferred"       # prompt for passkey but don't require it
+  }
 }
 
 resource "aws_cognito_user_group" "members" {
@@ -37,6 +43,7 @@ resource "aws_cognito_user_pool_client" "main" {
   explicit_auth_flows = [
     "ALLOW_USER_SRP_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
+    "ALLOW_USER_AUTH",   # required for passkey sign-in
   ]
 
   supported_identity_providers = ["COGNITO"]
@@ -60,7 +67,10 @@ resource "aws_cognito_user_pool_client" "main" {
   allowed_oauth_flows_user_pool_client = true
 }
 
+# managed_login_version = 2 activates the Managed Login hosted UI,
+# which is required for passkey registration and sign-in.
 resource "aws_cognito_user_pool_domain" "main" {
-  domain       = "auth-${data.aws_caller_identity.current.account_id}"
-  user_pool_id = aws_cognito_user_pool.main.id
+  domain                = "auth-${data.aws_caller_identity.current.account_id}"
+  user_pool_id          = aws_cognito_user_pool.main.id
+  managed_login_version = 2
 }
