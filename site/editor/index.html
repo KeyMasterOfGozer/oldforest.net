@@ -506,7 +506,9 @@ function onTitleInput(e) {
 
 async function loadPostContent(slug) {
   try {
-    const data = await apiFetch(`/v1/posts/${slug}`);
+    // Always use the authenticated members endpoint in the editor —
+    // the public endpoint returns 403 for members-only posts.
+    const data = await apiFetch(`/v1/posts/members/${slug}`);
     const content = data.content ?? '';
     if (easyMDE) easyMDE.value(content);
     else document.getElementById('f-content').value = content;
