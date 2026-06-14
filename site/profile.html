@@ -153,6 +153,12 @@ async function apiFetch(path, opts = {}) {
       ...(opts.headers || {}),
     },
   });
+  if (res.status === 401) {
+    // Token expired — redirect to login and come back here after
+    sessionStorage.setItem('return_to', window.location.href);
+    window.location.href = '/index.html';
+    throw new Error('Session expired');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
   return data;

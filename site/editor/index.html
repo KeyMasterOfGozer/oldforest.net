@@ -567,6 +567,7 @@ async function init() {
       accessToken = tokens.access_token;
       sessionStorage.setItem('access_token', tokens.access_token);
       sessionStorage.setItem('id_token', tokens.id_token);
+      if (tokens.refresh_token) sessionStorage.setItem('refresh_token', tokens.refresh_token);
     } catch (e) {
       toast(`Login failed: ${e.message}`, 'error');
       showAuthScreen();

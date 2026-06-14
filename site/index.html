@@ -220,6 +220,8 @@ async function init() {
       const tokens = await exchangeCode(code);
       accessToken = tokens.access_token;
       sessionStorage.setItem('access_token', tokens.access_token);
+      if (tokens.id_token) sessionStorage.setItem('id_token', tokens.id_token);
+      if (tokens.refresh_token) sessionStorage.setItem('refresh_token', tokens.refresh_token);
       const returnTo = sessionStorage.getItem('return_to');
       sessionStorage.removeItem('return_to');
       if (returnTo && returnTo !== window.location.href) {
