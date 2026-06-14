@@ -116,7 +116,10 @@
 <body>
 
 <header>
-  <h1>🌲 oldforest editor</h1>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <h1>🌲 oldforest editor</h1>
+    <a href="/" style="font-size:13px;color:var(--muted);text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">← View site</a>
+  </div>
   <div id="user-info">
     <span id="user-email"></span>
     <button class="btn-secondary" id="btn-logout">Logout</button>
@@ -198,6 +201,17 @@
 
     <div class="editor-wrapper">
       <textarea id="f-content"></textarea>
+    </div>
+
+    <!-- Upload panel -->
+    <div id="upload-panel" style="margin-bottom:16px;">
+      <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:8px;">Attachments</label>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button class="btn-secondary" id="btn-upload-file" type="button">⬆ Upload image / file</button>
+        <span id="upload-status" style="font-size:13px;color:var(--muted);"></span>
+      </div>
+      <input type="file" id="file-upload-input" accept="image/*,.pdf,.txt,.md" style="display:none">
+      <div id="uploaded-files" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
   </div>
 </main>
@@ -471,7 +485,15 @@ function openEditor(post) {
           'bold', 'italic', 'strikethrough', '|',
           'heading-1', 'heading-2', 'heading-3', '|',
           'unordered-list', 'ordered-list', 'quote', '|',
-          'link', 'image', '|',
+          'link',
+          {
+            name: 'upload-image',
+            action: () => document.getElementById('file-upload-input').click(),
+            className: 'fa fa-upload',
+            title: 'Upload image or file',
+            noDisable: true,
+          },
+          '|',
           'preview', 'side-by-side', 'fullscreen', '|',
           'guide'
         ],
@@ -604,6 +626,48 @@ async function init() {
   document.getElementById('btn-back').onclick       = showListView;
   document.getElementById('btn-save-draft').onclick = () => handleSave('draft');
   document.getElementById('btn-publish').onclick    = () => handleSave('published');
+
+  // ── File upload ──────────────────────────────
+  document.getElementById('btn-upload-file').onclick = () =>
+    document.getElementById('file-upload-input').click();
+
+  document.getElementById('file-upload-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = ''; // reset so same file can be re-uploaded
+
+    const statusEl = document.getElementById('upload-status');
+    statusEl.textContent = `Uploading ${file.name}…`;
+    try {
+      const url = await uploadImage(file);
+      const isImage = file.type.startsWith('image/');
+      const md = isImage ? `![${file.name}](${url})` : `[${file.name}](${url})`;
+
+      // Insert markdown at cursor (or at end if no editor)
+      if (easyMDE) {
+        easyMDE.codemirror.replaceSelection(md);
+        easyMDE.codemirror.focus();
+      } else {
+        const ta = document.getElementById('f-content');
+        const pos = ta.selectionStart ?? ta.value.length;
+        ta.value = ta.value.slice(0, pos) + md + ta.value.slice(pos);
+      }
+
+      // Add a chip to the uploaded-files list
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;';
+      chip.title = 'Click to copy URL';
+      chip.innerHTML = `${isImage ? '🖼' : '📄'} ${esc(file.name)}`;
+      chip.onclick = () => { navigator.clipboard.writeText(url); toast('URL copied!'); };
+      document.getElementById('uploaded-files').appendChild(chip);
+
+      statusEl.textContent = '';
+      toast('Uploaded — markdown inserted');
+    } catch (err) {
+      statusEl.textContent = '';
+      toast(`Upload failed: ${err.message}`, 'error');
+    }
+  });
 
   showListView();
 }

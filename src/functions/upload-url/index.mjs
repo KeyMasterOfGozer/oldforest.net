@@ -17,17 +17,27 @@ export const handler = async (event) => {
   }
 
   const body = JSON.parse(event.body ?? '{}');
-  const ext = (body.filename ?? 'image.jpg').split('.').pop();
+  const filename = body.filename ?? 'upload.bin';
+  const ext = filename.split('.').pop().toLowerCase();
+
+  // Allowed extensions
+  const allowed = ['jpg','jpeg','png','gif','webp','svg','pdf','txt','md'];
+  if (!allowed.includes(ext)) {
+    return { statusCode: 400, body: JSON.stringify({ message: `File type .${ext} not allowed` }) };
+  }
+
   const key = `images/${randomUUID()}.${ext}`;
+  const contentType = body.contentType || 'application/octet-stream';
 
   const url = await getSignedUrl(s3, new PutObjectCommand({
     Bucket: process.env.CONTENT_BUCKET,
     Key: key,
-    ContentType: body.contentType ?? 'image/jpeg',
+    ContentType: contentType,
   }), { expiresIn: 300 });
 
   return {
     statusCode: 200,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ uploadUrl: url, key }),
   };
 };
