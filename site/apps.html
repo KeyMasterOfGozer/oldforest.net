@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apps — Old Forest</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1a0b;
+      --surface:  #162414;
+      --border:   #2a3e20;
+      --text:     #e8d8b0;
+      --muted:    #859e6a;
+      --accent:   #78a84e;
+      --accent2:  #96c860;
+      --members:  #c8904a;
+      --radius:   8px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent2); text-decoration: underline; }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
+    .header-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+    .site-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; font-family: Georgia, serif; }
+    .header-right { display: flex; align-items: center; gap: 14px; font-size: 14px; }
+    #user-email { color: var(--muted); }
+
+    /* ── Buttons ── */
+    button { cursor: pointer; font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 500; border: none; border-radius: var(--radius); padding: 7px 16px; transition: opacity .15s; }
+    button:hover { opacity: .85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-outline  { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+
+    /* ── Main ── */
+    main { max-width: 900px; margin: 0 auto; padding: 48px 24px; }
+
+    .page-intro { margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 32px; }
+    .page-intro h1 { font-size: 32px; color: var(--accent); margin-bottom: 8px; font-family: Georgia, serif; }
+    .page-intro p  { color: var(--muted); font-size: 16px; }
+
+    /* ── App grid ── */
+    #apps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+
+    .app-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: border-color .15s;
+    }
+    .app-card:hover { border-color: var(--accent2); }
+
+    .app-icon { font-size: 40px; line-height: 1; }
+    .app-name { font-size: 18px; font-weight: 600; color: var(--text); }
+    .app-desc { color: var(--muted); font-size: 14px; line-height: 1.55; flex: 1; }
+
+    .app-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+    .vis-badge {
+      font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 20px;
+    }
+    .vis-members { background: #2e1808; color: var(--members); border: 1px solid #5a3010; }
+    .vis-editors { background: #0e1e38; color: #6aaae0; border: 1px solid #1e3858; }
+    .vis-admins  { background: #2e1010; color: #e07060; border: 1px solid #5a2020; }
+
+    .btn-open {
+      font-size: 13px; font-weight: 600; padding: 7px 18px;
+      background: var(--accent); color: #0d1a0b; border-radius: var(--radius);
+      text-decoration: none; transition: opacity .15s; display: inline-block;
+    }
+    .btn-open:hover { opacity: .85; text-decoration: none; color: #0d1a0b; }
+
+    /* ── Sign-in nudge ── */
+    #signin-nudge {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      font-size: 14px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    /* ── States ── */
+    .loading { text-align: center; padding: 60px 0; color: var(--muted); }
+    .empty   { text-align: center; padding: 60px 0; color: var(--muted); }
+    .empty h3 { font-size: 20px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="site-title" href="/">🌳 Old Forest</a>
+    <div class="header-right">
+      <a href="/" style="color:var(--muted);font-size:13px;">Blog</a>
+      <span id="user-email"></span>
+      <button class="btn-outline" id="btn-auth">Sign in</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="page-intro">
+    <h1>Apps</h1>
+    <p>Tools and applications for the Old Forest community.</p>
+  </div>
+
+  <div id="signin-nudge" style="display:none">
+    <span>Sign in to see additional apps available to members.</span>
+    <button class="btn-primary" onclick="login()">Sign in</button>
+  </div>
+
+  <div id="apps-grid"><div class="loading">Loading…</div></div>
+</main>
+
+<script>
+'use strict';
+
+const CFG = {
+  cognitoDomain: 'auth-165395066552.auth.us-east-1.amazoncognito.com',
+  clientId:      '71fv32ot0raceh7mt5lqgjvbto',
+  redirectUri:   'https://oldforest.net/apps.html',
+  apiBase:       'https://aijo86kijl.execute-api.us-east-1.amazonaws.com',
+};
+
+let accessToken = null;
+let userGroups  = [];
+
+// ── PKCE ──────────────────────────────────────
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function generatePKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+
+// ── AUTH ──────────────────────────────────────
+async function login() {
+  const { verifier, challenge } = await generatePKCE();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('return_to', window.location.href);
+  const p = new URLSearchParams({
+    response_type: 'code', client_id: CFG.clientId,
+    redirect_uri: CFG.redirectUri,
+    scope: 'openid email profile aws.cognito.signin.user.admin',
+    code_challenge_method: 'S256', code_challenge: challenge,
+  });
+  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
+}
+
+function logout() {
+  accessToken = null;
+  sessionStorage.clear();
+  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
+  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
+}
+
+async function exchangeCode(code) {
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code', client_id: CFG.clientId,
+      redirect_uri: CFG.redirectUri, code, code_verifier: verifier,
+    }),
+  });
+  if (!res.ok) throw new Error('Token exchange failed');
+  return res.json();
+}
+
+function parseJWT(token) {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+  catch { return {}; }
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── VISIBILITY FILTERING ───────────────────────
+function canSee(visibility) {
+  if (visibility === 'public')  return true;
+  if (visibility === 'members') return userGroups.some(g => ['members','editors','admins'].includes(g));
+  if (visibility === 'editors') return userGroups.some(g => ['editors','admins'].includes(g));
+  if (visibility === 'admins')  return userGroups.includes('admins');
+  return false;
+}
+
+function hasHiddenApps(apps) {
+  if (accessToken) return false; // if logged in, nothing is hidden from view
+  return apps.some(a => a.visibility !== 'public');
+}
+
+// ── RENDER ────────────────────────────────────
+function renderApps(apps) {
+  const visible = apps.filter(a => canSee(a.visibility));
+  const nudge = document.getElementById('signin-nudge');
+
+  if (!accessToken && hasHiddenApps(apps)) {
+    nudge.style.display = 'flex';
+  } else {
+    nudge.style.display = 'none';
+  }
+
+  const grid = document.getElementById('apps-grid');
+  if (!visible.length) {
+    grid.innerHTML = '<div class="empty"><h3>No apps yet</h3><p>Check back soon.</p></div>';
+    return;
+  }
+
+  const visBadge = (v) => {
+    if (v === 'members') return '<span class="vis-badge vis-members">Members</span>';
+    if (v === 'editors') return '<span class="vis-badge vis-editors">Editors</span>';
+    if (v === 'admins')  return '<span class="vis-badge vis-admins">Admins</span>';
+    return '';
+  };
+
+  grid.innerHTML = visible.map(app => {
+    const linkAttrs = app.external
+      ? `href="${esc(app.url)}" target="_blank" rel="noopener noreferrer"`
+      : `href="${esc(app.url)}"`;
+    const openLabel = app.external ? 'Open ↗' : 'Open →';
+    return `
+      <div class="app-card">
+        <div class="app-icon">${esc(app.icon || '🧩')}</div>
+        <div>
+          <div class="app-name">${esc(app.name)}</div>
+          ${app.description ? `<div class="app-desc">${esc(app.description)}</div>` : ''}
+        </div>
+        <div class="app-footer">
+          ${visBadge(app.visibility)}
+          <a class="btn-open" ${linkAttrs}>${openLabel}</a>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── INIT ──────────────────────────────────────
+async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+
+  if (code) {
+    history.replaceState({}, '', window.location.pathname);
+    try {
+      const tokens = await exchangeCode(code);
+      accessToken = tokens.access_token;
+      sessionStorage.setItem('access_token', tokens.access_token);
+      if (tokens.id_token)      sessionStorage.setItem('id_token', tokens.id_token);
+      if (tokens.refresh_token) sessionStorage.setItem('refresh_token', tokens.refresh_token);
+    } catch (e) { console.error('Login failed', e); }
+  } else {
+    accessToken = sessionStorage.getItem('access_token');
+  }
+
+  // Resolve user groups from JWT
+  if (accessToken) {
+    const claims = parseJWT(accessToken);
+    const raw = claims['cognito:groups'] ?? [];
+    userGroups = Array.isArray(raw) ? raw : String(raw).split(',').map(g => g.trim());
+  }
+
+  // Update header
+  const btnAuth  = document.getElementById('btn-auth');
+  const userSpan = document.getElementById('user-email');
+  if (accessToken) {
+    const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
+    const displayName = idClaims.name || idClaims.email || 'My Profile';
+    userSpan.innerHTML = `<a href="/profile.html" style="color:var(--muted);font-size:14px;">${esc(displayName)}</a>`;
+    btnAuth.textContent = 'Sign out';
+    btnAuth.onclick = logout;
+
+    if (userGroups.includes('editors')) {
+      const el = document.createElement('a');
+      el.href = '/editor/index.html'; el.textContent = 'Editor';
+      el.style.cssText = 'font-size:13px;font-weight:500;color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 14px;';
+      document.querySelector('.header-right').insertBefore(el, btnAuth);
+    }
+    if (userGroups.includes('admins')) {
+      const el = document.createElement('a');
+      el.href = '/admin/index.html'; el.textContent = 'Admin';
+      el.style.cssText = 'font-size:13px;font-weight:500;color:#e07060;border:1px solid #5a2020;background:#2e1010;border-radius:6px;padding:6px 14px;';
+      document.querySelector('.header-right').insertBefore(el, btnAuth);
+    }
+  } else {
+    btnAuth.textContent = 'Sign in';
+    btnAuth.onclick = login;
+  }
+
+  // Load apps
+  try {
+    const res = await fetch(`${CFG.apiBase}/v1/apps`);
+    if (!res.ok) throw new Error('Failed to load apps');
+    const { apps } = await res.json();
+    renderApps(apps || []);
+  } catch (e) {
+    document.getElementById('apps-grid').innerHTML =
+      '<div class="loading">Failed to load apps. Please try again.</div>';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

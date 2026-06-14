@@ -302,3 +302,75 @@ resource "aws_apigatewayv2_route" "delete_admin_user" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
   target             = "integrations/${aws_apigatewayv2_integration.admin_users.id}"
 }
+
+# ── Apps ──────────────────────────────────────────────────────────────────────
+
+resource "aws_lambda_permission" "list_apps" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.list_apps.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "admin_apps" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.admin_apps.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "list_apps" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.list_apps.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_integration" "admin_apps" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.admin_apps.invoke_arn
+  payload_format_version = "2.0"
+}
+
+# Public
+resource "aws_apigatewayv2_route" "list_apps" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /v1/apps"
+  target    = "integrations/${aws_apigatewayv2_integration.list_apps.id}"
+}
+
+# Admin CRUD
+resource "aws_apigatewayv2_route" "list_admin_apps" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /v1/admin/apps"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.admin_apps.id}"
+}
+
+resource "aws_apigatewayv2_route" "create_admin_app" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /v1/admin/apps"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.admin_apps.id}"
+}
+
+resource "aws_apigatewayv2_route" "update_admin_app" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "PUT /v1/admin/apps/{appId}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.admin_apps.id}"
+}
+
+resource "aws_apigatewayv2_route" "delete_admin_app" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "DELETE /v1/admin/apps/{appId}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.admin_apps.id}"
+}

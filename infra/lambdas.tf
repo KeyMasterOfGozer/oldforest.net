@@ -194,6 +194,50 @@ resource "aws_lambda_function" "admin_files" {
   }
 }
 
+# ── list-apps ────────────────────────────────────────────────────────────────
+data "archive_file" "list_apps" {
+  type        = "zip"
+  source_dir  = "${path.module}/../src/functions/list-apps"
+  output_path = "${path.module}/.lambda-zips/list-apps.zip"
+}
+
+resource "aws_lambda_function" "list_apps" {
+  function_name    = "oldforest-list-apps"
+  role             = aws_iam_role.list_apps.arn
+  runtime          = local.lambda_runtime
+  handler          = local.lambda_handler
+  timeout          = local.lambda_timeout
+  memory_size      = local.lambda_memory
+  filename         = data.archive_file.list_apps.output_path
+  source_code_hash = data.archive_file.list_apps.output_base64sha256
+
+  environment {
+    variables = { APPS_TABLE = aws_dynamodb_table.apps.name }
+  }
+}
+
+# ── admin-apps ────────────────────────────────────────────────────────────────
+data "archive_file" "admin_apps" {
+  type        = "zip"
+  source_dir  = "${path.module}/../src/functions/admin-apps"
+  output_path = "${path.module}/.lambda-zips/admin-apps.zip"
+}
+
+resource "aws_lambda_function" "admin_apps" {
+  function_name    = "oldforest-admin-apps"
+  role             = aws_iam_role.admin_apps.arn
+  runtime          = local.lambda_runtime
+  handler          = local.lambda_handler
+  timeout          = local.lambda_timeout
+  memory_size      = local.lambda_memory
+  filename         = data.archive_file.admin_apps.output_path
+  source_code_hash = data.archive_file.admin_apps.output_base64sha256
+
+  environment {
+    variables = { APPS_TABLE = aws_dynamodb_table.apps.name }
+  }
+}
+
 # ── admin-users ───────────────────────────────────────────────────────────────
 resource "aws_lambda_function" "admin_users" {
   function_name    = "oldforest-admin-users"

@@ -1,3 +1,14 @@
+resource "aws_dynamodb_table" "apps" {
+  name         = "oldforest-apps"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "appId"
+
+  attribute {
+    name = "appId"
+    type = "S"
+  }
+}
+
 resource "aws_dynamodb_table" "posts" {
   name         = "oldforest-posts"
   billing_mode = "PAY_PER_REQUEST"

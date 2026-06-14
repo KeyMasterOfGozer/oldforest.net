@@ -45,12 +45,14 @@ resource "aws_cognito_user_pool_client" "main" {
     "https://${var.domain_name}/editor/index.html",
     "https://${var.domain_name}/index.html",
     "https://${var.domain_name}/admin/index.html",
+    "https://${var.domain_name}/apps.html",
   ]
 
   logout_urls = [
     "https://${var.domain_name}/editor/index.html",
     "https://${var.domain_name}/index.html",
     "https://${var.domain_name}/admin/index.html",
+    "https://${var.domain_name}/apps.html",
   ]
 
   allowed_oauth_flows                  = ["code"]

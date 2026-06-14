@@ -273,3 +273,47 @@ resource "aws_iam_role_policy" "admin_users" {
     }]
   })
 }
+
+# ── list-apps ─────────────────────────────────────────────────────────────────
+resource "aws_iam_role" "list_apps" {
+  name               = "oldforest-list-apps"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+resource "aws_iam_role_policy_attachment" "list_apps_logs" {
+  role       = aws_iam_role.list_apps.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+resource "aws_iam_role_policy" "list_apps" {
+  name   = "dynamo-read"
+  role   = aws_iam_role.list_apps.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["dynamodb:Scan"]
+      Resource = aws_dynamodb_table.apps.arn
+    }]
+  })
+}
+
+# ── admin-apps ────────────────────────────────────────────────────────────────
+resource "aws_iam_role" "admin_apps" {
+  name               = "oldforest-admin-apps"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+resource "aws_iam_role_policy_attachment" "admin_apps_logs" {
+  role       = aws_iam_role.admin_apps.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+resource "aws_iam_role_policy" "admin_apps" {
+  name   = "dynamo-crud"
+  role   = aws_iam_role.admin_apps.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = local.dynamo_crud_actions
+      Resource = aws_dynamodb_table.apps.arn
+    }]
+  })
+}

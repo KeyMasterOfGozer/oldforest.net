@@ -176,6 +176,7 @@
     <h1>🌳 Old Forest Admin</h1>
     <a class="header-link" href="/">← View site</a>
     <a class="header-link" href="/editor/index.html">Editor</a>
+    <a class="header-link" href="/apps.html">Apps</a>
   </div>
   <div class="header-right">
     <span id="user-name"></span>
@@ -193,6 +194,7 @@
   <div class="tabs">
     <button class="tab active" id="tab-files" onclick="showTab('files')">📁 Files</button>
     <button class="tab"        id="tab-users" onclick="showTab('users')">👥 Users</button>
+    <button class="tab"        id="tab-apps"  onclick="showTab('apps')">🧩 Apps</button>
   </div>
 
   <!-- Files panel -->
@@ -208,6 +210,21 @@
       </div>
     </div>
     <div id="files-grid"><div class="loading">Loading files…</div></div>
+  </div>
+
+  <!-- Apps panel -->
+  <div id="panel-apps" style="display:none">
+    <div class="toolbar">
+      <div>
+        <h2>Apps</h2>
+        <div class="count" id="apps-count"></div>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn-secondary" onclick="loadApps()">↺ Refresh</button>
+        <button class="btn-primary" onclick="openAppModal('create')">+ Add App</button>
+      </div>
+    </div>
+    <div id="apps-container"><div class="loading">Loading apps…</div></div>
   </div>
 
   <!-- Users panel -->
@@ -251,6 +268,7 @@ const CFG = {
 let accessToken = null;
 let allFiles    = [];
 let allUsers    = [];
+let allApps     = [];
 
 // ── PKCE ──────────────────────────────────────
 function b64url(buf) {
@@ -363,10 +381,10 @@ function toast(msg, type = 'success') {
 
 // ── TABS ──────────────────────────────────────
 function showTab(tab) {
-  document.getElementById('panel-files').style.display = tab === 'files' ? '' : 'none';
-  document.getElementById('panel-users').style.display = tab === 'users' ? '' : 'none';
-  document.getElementById('tab-files').className = 'tab' + (tab === 'files' ? ' active' : '');
-  document.getElementById('tab-users').className = 'tab' + (tab === 'users' ? ' active' : '');
+  ['files', 'users', 'apps'].forEach(t => {
+    document.getElementById(`panel-${t}`).style.display = t === tab ? '' : 'none';
+    document.getElementById(`tab-${t}`).className = 'tab' + (t === tab ? ' active' : '');
+  });
 }
 
 // ── FILES ─────────────────────────────────────
@@ -634,6 +652,202 @@ async function submitDeleteUser(idx) {
   }
 }
 
+// ── APPS ──────────────────────────────────────
+async function loadApps() {
+  document.getElementById('apps-container').innerHTML = '<div class="loading">Loading apps…</div>';
+  try {
+    const data = await apiFetch('/v1/admin/apps');
+    allApps = data.apps || [];
+    renderApps(allApps);
+  } catch (e) {
+    document.getElementById('apps-container').innerHTML =
+      `<div class="empty">Failed to load apps: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderApps(apps) {
+  document.getElementById('apps-count').textContent =
+    `${apps.length} app${apps.length !== 1 ? 's' : ''}`;
+  const container = document.getElementById('apps-container');
+  if (!apps.length) {
+    container.innerHTML = '<div class="empty">No apps yet. Click "+ Add App" to create one.</div>';
+    return;
+  }
+  const visBadge = (v) => {
+    const map = { public:'<span class="badge badge-none">Public</span>', members:'<span class="badge badge-member">Members</span>', editors:'<span class="badge badge-editor">Editors</span>', admins:'<span class="badge badge-admin">Admins</span>' };
+    return map[v] || `<span class="badge badge-none">${esc(v)}</span>`;
+  };
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Icon</th>
+          <th>Name</th>
+          <th>URL</th>
+          <th>Visibility</th>
+          <th>Order</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${apps.map((a, i) => `
+          <tr>
+            <td style="font-size:22px;text-align:center;">${esc(a.icon || '🧩')}</td>
+            <td>
+              <div class="user-email">${esc(a.name)}</div>
+              ${a.description ? `<div class="user-name">${esc(a.description)}</div>` : ''}
+            </td>
+            <td style="font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(a.url)}">
+              ${a.external ? '↗ ' : '→ '}${esc(a.url)}
+            </td>
+            <td>${visBadge(a.visibility)}</td>
+            <td style="color:var(--muted);font-size:13px;">${a.order ?? '—'}</td>
+            <td>
+              ${a.enabled
+                ? '<span class="badge badge-active">Enabled</span>'
+                : '<span class="badge badge-none">Disabled</span>'}
+            </td>
+            <td>
+              <div class="row-actions">
+                <button class="btn-secondary btn-sm" onclick="openAppModal('edit',${i})">Edit</button>
+                <button class="btn-danger btn-sm"    onclick="openAppModal('delete',${i})">Delete</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function appFormFields(a) {
+  return `
+    <div class="form-group">
+      <label>Name *</label>
+      <input type="text" id="a-name" value="${esc(a?.name || '')}" placeholder="My App">
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="a-desc" value="${esc(a?.description || '')}" placeholder="Short description">
+    </div>
+    <div class="form-group">
+      <label>Icon (emoji)</label>
+      <input type="text" id="a-icon" value="${esc(a?.icon || '🧩')}" placeholder="🧩" style="width:80px;">
+    </div>
+    <div class="form-group">
+      <label>URL *</label>
+      <input type="text" id="a-url" value="${esc(a?.url || '')}" placeholder="/app/my-app or https://sub.oldforest.net">
+    </div>
+    <div class="form-group">
+      <label>Visibility</label>
+      <select id="a-vis">
+        <option value="public"  ${(a?.visibility||'public')==='public'  ? 'selected':''}>Public</option>
+        <option value="members" ${a?.visibility==='members' ? 'selected':''}>Members</option>
+        <option value="editors" ${a?.visibility==='editors' ? 'selected':''}>Editors</option>
+        <option value="admins"  ${a?.visibility==='admins'  ? 'selected':''}>Admins</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:24px;">
+      <div class="form-group" style="flex:1;">
+        <label>Sort Order</label>
+        <input type="text" id="a-order" value="${a?.order ?? 99}" placeholder="99" style="width:80px;">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label>External Link</label>
+        <select id="a-ext">
+          <option value="false" ${!a?.external ? 'selected':''}>No (same site)</option>
+          <option value="true"  ${a?.external  ? 'selected':''}>Yes (new tab)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="a-enabled">
+        <option value="true"  ${a?.enabled !== false ? 'selected':''}>Enabled</option>
+        <option value="false" ${a?.enabled === false  ? 'selected':''}>Disabled</option>
+      </select>
+    </div>`;
+}
+
+function collectAppForm() {
+  return {
+    name:        document.getElementById('a-name').value.trim(),
+    description: document.getElementById('a-desc').value.trim(),
+    icon:        document.getElementById('a-icon').value.trim() || '🧩',
+    url:         document.getElementById('a-url').value.trim(),
+    visibility:  document.getElementById('a-vis').value,
+    order:       Number(document.getElementById('a-order').value) || 99,
+    external:    document.getElementById('a-ext').value === 'true',
+    enabled:     document.getElementById('a-enabled').value === 'true',
+  };
+}
+
+function openAppModal(type, idx) {
+  const app = typeof idx === 'number' ? allApps[idx] : null;
+  const title   = document.getElementById('modal-title');
+  const body    = document.getElementById('modal-body');
+  const actions = document.getElementById('modal-actions');
+
+  if (type === 'create') {
+    title.textContent = 'Add App';
+    body.innerHTML = appFormFields(null);
+    actions.innerHTML = `
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitAppCreate()">Create App</button>`;
+
+  } else if (type === 'edit') {
+    title.textContent = 'Edit App';
+    body.innerHTML = appFormFields(app);
+    actions.innerHTML = `
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitAppEdit(${idx})">Save</button>`;
+
+  } else if (type === 'delete') {
+    title.textContent = 'Delete App';
+    body.innerHTML = `
+      <p style="color:var(--muted);margin-bottom:10px;">Permanently delete this app?</p>
+      <p style="font-weight:500;">${esc(app.name)}</p>`;
+    actions.innerHTML = `
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-danger" onclick="submitAppDelete(${idx})">Delete App</button>`;
+  }
+  openBackdrop();
+}
+
+async function submitAppCreate() {
+  const data = collectAppForm();
+  if (!data.name) { toast('Name is required', 'error'); return; }
+  if (!data.url)  { toast('URL is required', 'error'); return; }
+  closeModal();
+  try {
+    await apiFetch('/v1/admin/apps', { method: 'POST', body: JSON.stringify(data) });
+    toast('App created');
+    loadApps();
+  } catch (e) { toast(`Failed: ${e.message}`, 'error'); }
+}
+
+async function submitAppEdit(idx) {
+  const data = collectAppForm();
+  if (!data.name) { toast('Name is required', 'error'); return; }
+  if (!data.url)  { toast('URL is required', 'error'); return; }
+  const a = allApps[idx];
+  closeModal();
+  try {
+    await apiFetch(`/v1/admin/apps/${encodeURIComponent(a.appId)}`, { method: 'PUT', body: JSON.stringify(data) });
+    toast('App updated');
+    loadApps();
+  } catch (e) { toast(`Failed: ${e.message}`, 'error'); }
+}
+
+async function submitAppDelete(idx) {
+  const a = allApps[idx];
+  closeModal();
+  try {
+    await apiFetch(`/v1/admin/apps/${encodeURIComponent(a.appId)}`, { method: 'DELETE' });
+    toast('App deleted');
+    loadApps();
+  } catch (e) { toast(`Failed: ${e.message}`, 'error'); }
+}
+
 // ── INIT ──────────────────────────────────────
 async function init() {
   const params = new URLSearchParams(window.location.search);
@@ -681,6 +895,7 @@ async function init() {
 
   loadFiles();
   loadUsers();
+  loadApps();
 }
 
 function showAuthScreen(msg) {
