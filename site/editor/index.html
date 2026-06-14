@@ -4,18 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>oldforest — Editor</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #1a1c1e;
-      --surface:  #23262a;
-      --border:   #333740;
-      --text:     #dde1e7;
-      --muted:    #8a919e;
-      --accent:   #4caf78;
-      --danger:   #e05c5c;
+      --bg:       #090f08;
+      --surface:  #101a0d;
+      --border:   #1e3018;
+      --text:     #ddd4b0;
+      --muted:    #7a8e64;
+      --accent:   #6ca048;
+      --danger:   #b84040;
       --radius:   6px;
     }
 
@@ -117,8 +118,9 @@
 
 <header>
   <div style="display:flex;align-items:center;gap:16px;">
-    <h1>🌲 oldforest editor</h1>
+    <h1>🌳 oldforest editor</h1>
     <a href="/" style="font-size:13px;color:var(--muted);text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">← View site</a>
+    <a id="admin-link" href="/admin/index.html" style="display:none;font-size:13px;font-weight:500;color:#e07060;border:1px solid #5a2020;background:#2e1010;border-radius:6px;padding:5px 12px;text-decoration:none;">Admin</a>
   </div>
   <div id="user-info">
     <span id="user-email"></span>
@@ -185,6 +187,22 @@
       <div class="form-group full">
         <label for="f-summary">Summary</label>
         <textarea id="f-summary" placeholder="Short excerpt shown in post listings…"></textarea>
+      </div>
+      <div class="form-group full">
+        <label>Thumbnail</label>
+        <div style="display:flex;align-items:flex-start;gap:14px;">
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+            <input id="f-thumbnail" type="text" placeholder="https://… or upload an image">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button class="btn-secondary" id="btn-upload-thumb" type="button">⬆ Upload image</button>
+              <span id="thumb-upload-status" style="font-size:12px;color:var(--muted);"></span>
+            </div>
+            <input type="file" id="thumb-upload-input" accept="image/*" style="display:none">
+          </div>
+          <div id="thumb-preview" style="width:140px;height:90px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;">
+            No image
+          </div>
+        </div>
       </div>
     </div>
 
@@ -508,6 +526,8 @@ function openEditor(post) {
   document.getElementById('f-summary').value    = post?.summary    ?? '';
   document.getElementById('f-tags').value       = (post?.tags ?? []).join(', ');
   document.getElementById('f-visibility').value = post?.visibility ?? 'public';
+  document.getElementById('f-thumbnail').value  = post?.thumbnail  ?? '';
+  updateThumbPreview(post?.thumbnail ?? '');
 
   // Load content if editing existing post
   if (post?.postId) {
@@ -551,6 +571,7 @@ function collectFormData(status) {
     summary:    document.getElementById('f-summary').value.trim(),
     tags:       document.getElementById('f-tags').value.split(',').map(t => t.trim()).filter(Boolean),
     visibility: document.getElementById('f-visibility').value,
+    thumbnail:  document.getElementById('f-thumbnail').value.trim(),
     content:    easyMDE ? easyMDE.value() : document.getElementById('f-content').value,
     status,
   };
@@ -571,6 +592,19 @@ async function handleSave(status) {
   } finally {
     btn.disabled = false;
     btn.textContent = status === 'published' ? 'Publish' : 'Save Draft';
+  }
+}
+
+// ─────────────────────────────────────────────
+//  THUMBNAIL
+// ─────────────────────────────────────────────
+function updateThumbPreview(url) {
+  const preview = document.getElementById('thumb-preview');
+  if (!preview) return;
+  if (url) {
+    preview.innerHTML = `<img src="${url.replace(/"/g,'')}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<span style=color:var(--muted);font-size:12px>Bad URL</span>'">`;
+  } else {
+    preview.innerHTML = '<span style="color:var(--muted);font-size:12px">No image</span>';
   }
 }
 
@@ -607,7 +641,12 @@ async function init() {
 
   // Verify editor group membership
   const claims = parseJWT(accessToken);
-  const groups = claims['cognito:groups'] ?? [];
+  const groups = Array.isArray(claims['cognito:groups'])
+    ? claims['cognito:groups']
+    : String(claims['cognito:groups'] ?? '').split(',').map(g => g.trim());
+  if (groups.includes('admins')) {
+    document.getElementById('admin-link').style.display = 'inline-block';
+  }
   if (!groups.includes('editors')) {
     toast('Your account does not have editor access.', 'error');
     showAuthScreen();

@@ -43,6 +43,7 @@ export const handler = async (event) => {
     status: body.status ?? 'draft',
     visibility: body.visibility ?? 'public',
     tags: body.tags ?? [],
+    thumbnail: body.thumbnail ?? '',
     contentKey,
   };
 

@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Old Forest</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1a0b;
+      --surface:  #162414;
+      --surface2: #1c2e18;
+      --border:   #2a3e20;
+      --text:     #e8d8b0;
+      --muted:    #859e6a;
+      --accent:   #78a84e;
+      --accent2:  #96c860;
+      --danger:   #c05848;
+      --amber:    #c8904a;
+      --radius:   6px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; min-height: 100vh; }
+
+    /* ── Header ── */
+    header { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+    .header-left { display: flex; align-items: center; gap: 18px; }
+    header h1 { font-size: 17px; font-weight: 600; color: var(--accent); }
+    .header-link { font-size: 13px; color: var(--muted); text-decoration: none; }
+    .header-link:hover { color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); }
+
+    /* ── Buttons ── */
+    button { cursor: pointer; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 500; padding: 7px 16px; transition: opacity .15s; }
+    button:hover { opacity: .85; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary   { background: var(--accent); color: #0d1a0b; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger    { background: var(--danger);  color: #fff; }
+    .btn-sm        { font-size: 12px; padding: 4px 10px; }
+
+    /* ── Main ── */
+    main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ── Auth screen ── */
+    #auth-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 80vh; gap: 16px; text-align: center; }
+    #auth-screen h2 { font-size: 22px; }
+    #auth-screen p  { color: var(--muted); font-size: 15px; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+    .tab { background: transparent; color: var(--muted); border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 20px; font-size: 14px; font-weight: 500; margin-bottom: -1px; cursor: pointer; }
+    .tab:hover { color: var(--text); opacity: 1; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .toolbar h2 { font-size: 18px; }
+    .toolbar-right { display: flex; align-items: center; gap: 10px; }
+    .count { font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+    input[type="search"] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 13px;
+      padding: 6px 12px;
+      width: 220px;
+      outline: none;
+    }
+    input[type="search"]:focus { border-color: var(--accent); }
+    input[type="search"]::placeholder { color: var(--muted); }
+
+    /* ── File grid ── */
+    #files-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 12px;
+    }
+    .file-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .file-thumb {
+      height: 120px;
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-size: 36px;
+    }
+    .file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .file-info { padding: 8px 10px; flex: 1; }
+    .file-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .file-actions { display: flex; gap: 6px; padding: 6px 10px 8px; border-top: 1px solid var(--border); }
+    .file-actions button { flex: 1; font-size: 11px; padding: 4px 6px; }
+
+    /* ── Users table ── */
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: var(--surface); }
+    .user-email { font-weight: 500; font-size: 14px; }
+    .user-name  { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .row-actions { display: flex; gap: 6px; }
+
+    /* ── Badges ── */
+    .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 20px; }
+    .badge-admin   { background: #2e1010; color: #e07060; border: 1px solid #5a2020; }
+    .badge-editor  { background: #0e1e38; color: #6aaae0; border: 1px solid #1e3858; }
+    .badge-member  { background: #2e1808; color: var(--amber); border: 1px solid #5a3010; }
+    .badge-none    { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .badge-active  { background: #0e2a18; color: #78d898; border: 1px solid #1e5030; }
+    .badge-invited { background: #2a2210; color: #d8b860; border: 1px solid #5a4820; }
+
+    /* ── Modal ── */
+    #modal-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    #modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px 32px;
+      width: 420px;
+      max-width: calc(100vw - 48px);
+    }
+    .modal h2 { font-size: 18px; margin-bottom: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    input[type="text"], input[type="email"], select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 14px;
+      padding: 9px 12px;
+      width: 100%;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    select option { background: var(--surface2); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+    .modal-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ── States ── */
+    .loading { text-align: center; padding: 60px 0; color: var(--muted); }
+    .empty   { text-align: center; padding: 60px 0; color: var(--muted); }
+
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 500; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 9999; }
+    #toast.show    { opacity: 1; }
+    #toast.success { background: #0e2a18; color: #78d898; border: 1px solid #1e5030; }
+    #toast.error   { background: #2a0e0e; color: #e07878; border: 1px solid #501818; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>🌳 Old Forest Admin</h1>
+    <a class="header-link" href="/">← View site</a>
+    <a class="header-link" href="/editor/index.html">Editor</a>
+  </div>
+  <div class="header-right">
+    <span id="user-name"></span>
+    <button class="btn-secondary" id="btn-logout">Sign out</button>
+  </div>
+</header>
+
+<div id="auth-screen">
+  <h2>Admin Access Required</h2>
+  <p id="auth-msg">Sign in with an admin account to access this page.</p>
+  <button class="btn-primary" id="btn-login" style="margin-top:8px;">Sign in</button>
+</div>
+
+<main id="main-content" style="display:none">
+  <div class="tabs">
+    <button class="tab active" id="tab-files" onclick="showTab('files')">📁 Files</button>
+    <button class="tab"        id="tab-users" onclick="showTab('users')">👥 Users</button>
+  </div>
+
+  <!-- Files panel -->
+  <div id="panel-files">
+    <div class="toolbar">
+      <div>
+        <h2>Uploaded Files</h2>
+        <div class="count" id="files-count"></div>
+      </div>
+      <div class="toolbar-right">
+        <input type="search" id="file-search" placeholder="Search files…" oninput="filterFiles(this.value)">
+        <button class="btn-secondary" onclick="loadFiles()">↺ Refresh</button>
+      </div>
+    </div>
+    <div id="files-grid"><div class="loading">Loading files…</div></div>
+  </div>
+
+  <!-- Users panel -->
+  <div id="panel-users" style="display:none">
+    <div class="toolbar">
+      <div>
+        <h2>Users</h2>
+        <div class="count" id="users-count"></div>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn-secondary" onclick="loadUsers()">↺ Refresh</button>
+        <button class="btn-primary" onclick="openModal('create')">+ Create User</button>
+      </div>
+    </div>
+    <div id="users-container"><div class="loading">Loading users…</div></div>
+  </div>
+</main>
+
+<!-- Modal -->
+<div id="modal-backdrop" onclick="handleBackdropClick(event)">
+  <div class="modal" id="modal-box">
+    <h2 id="modal-title"></h2>
+    <div id="modal-body"></div>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+const CFG = {
+  cognitoDomain: 'auth-165395066552.auth.us-east-1.amazoncognito.com',
+  clientId:      '3ri08qut6b7db1n0j9317equ5e',
+  redirectUri:   'https://oldforest.net/admin/index.html',
+  apiBase:       'https://icqes4ud42.execute-api.us-east-1.amazonaws.com',
+  siteBase:      'https://oldforest.net',
+};
+
+let accessToken = null;
+let allFiles    = [];
+let allUsers    = [];
+
+// ── PKCE ──────────────────────────────────────
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function generatePKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+
+// ── AUTH ──────────────────────────────────────
+async function login() {
+  const { verifier, challenge } = await generatePKCE();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  if (!sessionStorage.getItem('return_to')) {
+    sessionStorage.setItem('return_to', window.location.href);
+  }
+  const p = new URLSearchParams({
+    response_type: 'code', client_id: CFG.clientId,
+    redirect_uri: CFG.redirectUri,
+    scope: 'openid email profile aws.cognito.signin.user.admin',
+    code_challenge_method: 'S256', code_challenge: challenge,
+  });
+  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
+}
+
+function logout() {
+  sessionStorage.clear();
+  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
+  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
+}
+
+async function exchangeCode(code) {
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code', client_id: CFG.clientId,
+      redirect_uri: CFG.redirectUri, code, code_verifier: verifier,
+    }),
+  });
+  if (!res.ok) throw new Error('Token exchange failed');
+  return res.json();
+}
+
+function parseJWT(token) {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+  catch { return {}; }
+}
+
+// ── API ───────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${CFG.apiBase}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      ...(opts.headers || {}),
+    },
+  });
+  if (res.status === 204) return null;
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(e.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── HELPERS ───────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function primaryRole(groups) {
+  if (groups.includes('admins'))  return 'admin';
+  if (groups.includes('editors')) return 'editor';
+  if (groups.includes('members')) return 'member';
+  return 'none';
+}
+const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','svg']);
+function isImage(ext) { return IMAGE_EXTS.has(ext); }
+function fileIcon(ext) {
+  if (ext === 'pdf')  return '📄';
+  if (ext === 'md')   return '📝';
+  if (ext === 'txt')  return '📃';
+  return '📎';
+}
+
+// ── TOAST ─────────────────────────────────────
+let _toastTimer;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+// ── TABS ──────────────────────────────────────
+function showTab(tab) {
+  document.getElementById('panel-files').style.display = tab === 'files' ? '' : 'none';
+  document.getElementById('panel-users').style.display = tab === 'users' ? '' : 'none';
+  document.getElementById('tab-files').className = 'tab' + (tab === 'files' ? ' active' : '');
+  document.getElementById('tab-users').className = 'tab' + (tab === 'users' ? ' active' : '');
+}
+
+// ── FILES ─────────────────────────────────────
+async function loadFiles() {
+  document.getElementById('files-grid').innerHTML = '<div class="loading">Loading files…</div>';
+  try {
+    const data = await apiFetch('/v1/admin/files');
+    allFiles = (data.files || []).sort((a, b) =>
+      new Date(b.lastModified) - new Date(a.lastModified));
+    renderFiles(allFiles);
+  } catch (e) {
+    document.getElementById('files-grid').innerHTML =
+      `<div class="empty">Failed to load files: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderFiles(files) {
+  document.getElementById('files-count').textContent =
+    `${files.length} file${files.length !== 1 ? 's' : ''}`;
+  const grid = document.getElementById('files-grid');
+  if (!files.length) {
+    grid.innerHTML = '<div class="empty">No files uploaded yet.</div>';
+    return;
+  }
+  // Build lookup index for onclick (avoids escaping issues)
+  window._displayedFiles = files;
+  grid.innerHTML = files.map((f, i) => {
+    const url   = `${CFG.siteBase}/${f.key}`;
+    const thumb = isImage(f.ext)
+      ? `<img src="${esc(url)}" loading="lazy" alt="${esc(f.filename)}" onerror="this.style.display='none'">`
+      : `<span>${fileIcon(f.ext)}</span>`;
+    return `
+      <div class="file-card">
+        <div class="file-thumb">${thumb}</div>
+        <div class="file-info">
+          <div class="file-name" title="${esc(f.filename)}">${esc(f.filename)}</div>
+          <div class="file-meta">${fmtSize(f.size)} · ${fmtDate(f.lastModified)}</div>
+        </div>
+        <div class="file-actions">
+          <button class="btn-secondary btn-sm" onclick="copyFileUrl(${i})">Copy URL</button>
+          <button class="btn-danger btn-sm"    onclick="confirmDeleteFile(${i})">Delete</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function filterFiles(q) {
+  const lq = q.toLowerCase();
+  renderFiles(q ? allFiles.filter(f => f.filename.toLowerCase().includes(lq)) : allFiles);
+}
+
+function copyFileUrl(i) {
+  const f = window._displayedFiles[i];
+  const url = `${CFG.siteBase}/${f.key}`;
+  navigator.clipboard.writeText(url).then(() => toast('URL copied!'));
+}
+
+function confirmDeleteFile(i) {
+  const f = window._displayedFiles[i];
+  document.getElementById('modal-title').textContent = 'Delete File';
+  document.getElementById('modal-body').innerHTML = `
+    <p style="color:var(--muted);margin-bottom:10px;">Delete this file permanently? Posts that reference it will show broken links.</p>
+    <p style="font-weight:500;">${esc(f.filename)}</p>
+    <p style="font-size:12px;color:var(--muted);margin-top:4px;">${fmtSize(f.size)} · ${fmtDate(f.lastModified)}</p>
+  `;
+  document.getElementById('modal-actions').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn-danger" onclick="deleteFile(${i})">Delete</button>
+  `;
+  openBackdrop();
+}
+
+async function deleteFile(i) {
+  const f = window._displayedFiles[i];
+  closeModal();
+  try {
+    await apiFetch('/v1/admin/files?key=' + encodeURIComponent(f.key), { method: 'DELETE' });
+    toast('File deleted');
+    loadFiles();
+  } catch (e) {
+    toast(`Delete failed: ${e.message}`, 'error');
+  }
+}
+
+// ── USERS ─────────────────────────────────────
+async function loadUsers() {
+  document.getElementById('users-container').innerHTML = '<div class="loading">Loading users…</div>';
+  try {
+    const data = await apiFetch('/v1/admin/users');
+    allUsers = data.users || [];
+    renderUsers(allUsers);
+  } catch (e) {
+    document.getElementById('users-container').innerHTML =
+      `<div class="empty">Failed to load users: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderUsers(users) {
+  document.getElementById('users-count').textContent =
+    `${users.length} user${users.length !== 1 ? 's' : ''}`;
+  const container = document.getElementById('users-container');
+  if (!users.length) {
+    container.innerHTML = '<div class="empty">No users found.</div>';
+    return;
+  }
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Email / Username</th>
+          <th>Display Name</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${users.map((u, i) => {
+          const role = primaryRole(u.groups);
+          const statusBadge = u.status === 'FORCE_CHANGE_PASSWORD'
+            ? '<span class="badge badge-invited">Invited</span>'
+            : '<span class="badge badge-active">Active</span>';
+          return `
+            <tr>
+              <td class="user-email">${esc(u.email || u.username)}</td>
+              <td class="user-name">${esc(u.name || '—')}</td>
+              <td><span class="badge badge-${role}">${role.charAt(0).toUpperCase() + role.slice(1)}</span></td>
+              <td>${statusBadge}</td>
+              <td style="color:var(--muted);font-size:13px">${fmtDate(u.created)}</td>
+              <td>
+                <div class="row-actions">
+                  <button class="btn-secondary btn-sm" onclick="openModal('edit', ${i})">Edit</button>
+                  <button class="btn-danger btn-sm"    onclick="openModal('delete-user', ${i})">Delete</button>
+                </div>
+              </td>
+            </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── MODAL ─────────────────────────────────────
+function openBackdrop() {
+  document.getElementById('modal-backdrop').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal-backdrop').classList.remove('open');
+}
+function handleBackdropClick(e) {
+  if (e.target === document.getElementById('modal-backdrop')) closeModal();
+}
+
+function openModal(type, idx) {
+  const user = typeof idx === 'number' ? allUsers[idx] : null;
+  const title   = document.getElementById('modal-title');
+  const body    = document.getElementById('modal-body');
+  const actions = document.getElementById('modal-actions');
+
+  if (type === 'create') {
+    title.textContent = 'Create User';
+    body.innerHTML = `
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" id="m-email" placeholder="user@example.com">
+      </div>
+      <div class="form-group">
+        <label>Display Name</label>
+        <input type="text" id="m-name" placeholder="Optional">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="m-role">
+          <option value="">None</option>
+          <option value="members">Member</option>
+          <option value="editors">Editor</option>
+          <option value="admins">Admin</option>
+        </select>
+      </div>
+      <p class="modal-note">An invitation email with a temporary password will be sent.</p>`;
+    actions.innerHTML = `
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitCreate()">Create User</button>`;
+
+  } else if (type === 'edit') {
+    const role = primaryRole(user.groups);
+    const roleToGroup = { admin: 'admins', editor: 'editors', member: 'members', none: '' };
+    title.textContent = 'Edit User';
+    body.innerHTML = `
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">${esc(user.email || user.username)}</p>
+      <div class="form-group">
+        <label>Display Name</label>
+        <input type="text" id="m-name" value="${esc(user.name || '')}">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="m-role">
+          <option value=""        ${role === 'none'   ? 'selected' : ''}>None</option>
+          <option value="members" ${role === 'member' ? 'selected' : ''}>Member</option>
+          <option value="editors" ${role === 'editor' ? 'selected' : ''}>Editor</option>
+          <option value="admins"  ${role === 'admin'  ? 'selected' : ''}>Admin</option>
+        </select>
+      </div>`;
+    actions.innerHTML = `
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitEdit(${idx})">Save</button>`;
+
+  } else if (type === 'delete-user') {
+    title.textContent = 'Delete User';
+    body.innerHTML = `
+      <p style="color:var(--muted);margin-bottom:10px;">Permanently delete this user? They will lose all access.</p>
+      <p style="font-weight:500;">${esc(user.email || user.username)}</p>`;
+    actions.innerHTML = `
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-danger" onclick="submitDeleteUser(${idx})">Delete User</button>`;
+  }
+
+  openBackdrop();
+}
+
+async function submitCreate() {
+  const email = document.getElementById('m-email').value.trim();
+  const name  = document.getElementById('m-name').value.trim();
+  const role  = document.getElementById('m-role').value;
+  if (!email) { toast('Email is required', 'error'); return; }
+  closeModal();
+  try {
+    await apiFetch('/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, name, role }),
+    });
+    toast('User created — invitation email sent');
+    loadUsers();
+  } catch (e) {
+    toast(`Failed: ${e.message}`, 'error');
+  }
+}
+
+async function submitEdit(idx) {
+  const name = document.getElementById('m-name').value.trim();
+  const role = document.getElementById('m-role').value;
+  const u    = allUsers[idx];
+  closeModal();
+  try {
+    await apiFetch(`/v1/admin/users/${encodeURIComponent(u.username)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, role }),
+    });
+    toast('User updated');
+    loadUsers();
+  } catch (e) {
+    toast(`Failed: ${e.message}`, 'error');
+  }
+}
+
+async function submitDeleteUser(idx) {
+  const u = allUsers[idx];
+  closeModal();
+  try {
+    await apiFetch(`/v1/admin/users/${encodeURIComponent(u.username)}`, { method: 'DELETE' });
+    toast('User deleted');
+    loadUsers();
+  } catch (e) {
+    toast(`Failed: ${e.message}`, 'error');
+  }
+}
+
+// ── INIT ──────────────────────────────────────
+async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+
+  if (code) {
+    history.replaceState({}, '', window.location.pathname);
+    try {
+      const tokens = await exchangeCode(code);
+      accessToken = tokens.access_token;
+      sessionStorage.setItem('access_token', tokens.access_token);
+      if (tokens.id_token)     sessionStorage.setItem('id_token', tokens.id_token);
+      if (tokens.refresh_token) sessionStorage.setItem('refresh_token', tokens.refresh_token);
+      const rt = sessionStorage.getItem('return_to');
+      sessionStorage.removeItem('return_to');
+      if (rt && rt !== window.location.href) { window.location.href = rt; return; }
+    } catch {
+      showAuthScreen('Login failed. Please try again.');
+      return;
+    }
+  } else {
+    accessToken = sessionStorage.getItem('access_token');
+  }
+
+  if (!accessToken) { showAuthScreen(); return; }
+
+  // Check for admins group in token claims
+  const claims = parseJWT(accessToken);
+  const groups = Array.isArray(claims['cognito:groups'])
+    ? claims['cognito:groups']
+    : String(claims['cognito:groups'] ?? '').split(',').map(g => g.trim());
+
+  if (!groups.includes('admins')) {
+    showAuthScreen('Your account does not have admin access.');
+    document.getElementById('btn-login').style.display = 'none';
+    return;
+  }
+
+  // Render page
+  const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
+  document.getElementById('user-name').textContent = idClaims.name || idClaims.email || 'Admin';
+  document.getElementById('btn-logout').onclick = logout;
+  document.getElementById('main-content').style.display = '';
+  document.getElementById('auth-screen').style.display = 'none';
+
+  loadFiles();
+  loadUsers();
+}
+
+function showAuthScreen(msg) {
+  document.getElementById('auth-screen').style.display = 'flex';
+  if (msg) document.getElementById('auth-msg').textContent = msg;
+  document.getElementById('btn-login').onclick = login;
+}
+
+init();
+</script>
+</body>
+</html>

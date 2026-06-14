@@ -22,7 +22,7 @@ export const handler = async (event) => {
         ':personal': 'personal',
         ':sub': currentSub,
       },
-      ProjectionExpression: 'postId, slug, title, summary, author, createdAt, updatedAt, #s, visibility, tags',
+      ProjectionExpression: 'postId, slug, title, summary, author, createdAt, updatedAt, #s, visibility, tags, thumbnail',
       ExpressionAttributeNames: { '#s': 'status' },
     }));
     return {
@@ -41,7 +41,7 @@ export const handler = async (event) => {
       ':published': 'published',
       ':personal': 'personal',
     },
-    ProjectionExpression: 'postId, slug, title, summary, author, createdAt, tags, visibility',
+    ProjectionExpression: 'postId, slug, title, summary, author, createdAt, tags, visibility, thumbnail',
   }));
 
   return {

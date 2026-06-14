@@ -53,6 +53,12 @@ Resources:
       GroupName: editors
       UserPoolId: !Ref UserPool
 
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admins
+      UserPoolId: !Ref UserPool
+
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
@@ -67,9 +73,11 @@ Resources:
       CallbackURLs:
         - !Sub https://${DomainName}/editor/index.html
         - !Sub https://${DomainName}/index.html
+        - !Sub https://${DomainName}/admin/index.html
       LogoutURLs:
         - !Sub https://${DomainName}/editor/index.html
         - !Sub https://${DomainName}/index.html
+        - !Sub https://${DomainName}/admin/index.html
       AllowedOAuthFlows:
         - code
       AllowedOAuthScopes:
@@ -342,6 +350,86 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /v1/editor/upload
             Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  AdminFilesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/admin-files/
+      Handler: index.handler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref ContentBucket
+      Events:
+        ListFiles:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/admin/files
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteFile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/admin/files
+            Method: DELETE
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  AdminUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/admin-users/
+      Handler: index.handler
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminRemoveUserFromGroup
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        ListUsers:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/admin/users
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        CreateUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/admin/users
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        UpdateUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/admin/users/{username}
+            Method: PUT
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/admin/users/{username}
+            Method: DELETE
             Auth:
               Authorizer: CognitoAuthorizer
 
