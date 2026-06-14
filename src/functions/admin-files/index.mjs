@@ -45,13 +45,20 @@ export const handler = async (event) => {
 
       const files = (result.Contents || [])
         .filter(obj => obj.Key !== 'images/')
-        .map(obj => ({
-          key: obj.Key,
-          size: obj.Size,
-          lastModified: obj.LastModified,
-          filename: obj.Key.split('/').pop(),
-          ext: (obj.Key.split('.').pop() || '').toLowerCase(),
-        }));
+        .map(obj => {
+          const basename = obj.Key.split('/').pop();
+          // Strip UUID prefix from new-format keys: {uuid}-{original-name}.ext
+          const displayName = basename.replace(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/, ''
+          ) || basename;
+          return {
+            key: obj.Key,
+            size: obj.Size,
+            lastModified: obj.LastModified,
+            filename: displayName,
+            ext: (basename.split('.').pop() || '').toLowerCase(),
+          };
+        });
 
       return ok({ files });
     }

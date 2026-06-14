@@ -18,7 +18,9 @@ export const handler = async (event) => {
 
   const body = JSON.parse(event.body ?? '{}');
   const filename = body.filename ?? 'upload.bin';
-  const ext = filename.split('.').pop().toLowerCase();
+  const parts = filename.split('.');
+  const ext  = parts.pop().toLowerCase();
+  const base = parts.join('.') || 'file';
 
   // Allowed extensions
   const allowed = ['jpg','jpeg','png','gif','webp','svg','pdf','txt','md'];
@@ -26,7 +28,20 @@ export const handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: `File type .${ext} not allowed` }) };
   }
 
-  const key = `images/${randomUUID()}.${ext}`;
+  // Sanitize original filename for use in the S3 key
+  const safeName = base
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9.\-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]|[-.]$/g, '')
+    .slice(0, 80) || 'file';
+
+  // Date-based prefix: images/YYYY/MM/{uuid}-{original-name}.ext
+  const now = new Date();
+  const yyyy = now.getUTCFullYear();
+  const mm   = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const key  = `images/${yyyy}/${mm}/${randomUUID()}-${safeName}.${ext}`;
   const contentType = body.contentType || 'application/octet-stream';
 
   const url = await getSignedUrl(s3, new PutObjectCommand({
