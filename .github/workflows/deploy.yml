@@ -10,65 +10,50 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  TF_IN_AUTOMATION: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-
-      - name: Set up Python (required by SAM CLI)
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Install SAM CLI
-        run: pip install aws-sam-cli
-
-      # ── Option A: OIDC (preferred, no stored secrets) ──────────────────
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
-      # ────────────────────────────────────────────────────────────────────
-      # Option B: Named profile (uncomment if not using OIDC)
-      # - name: Write AWS credentials
-      #   run: |
-      #     mkdir -p ~/.aws
-      #     printf '[oldforest]\naws_access_key_id=%s\naws_secret_access_key=%s\n' \
-      #       "${{ secrets.AWS_ACCESS_KEY_ID }}" \
-      #       "${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> ~/.aws/credentials
-      # ────────────────────────────────────────────────────────────────────
 
-      - name: SAM build
-        run: sam build --parallel
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+          terraform_wrapper: false
 
-      - name: SAM deploy
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve
+
+      - name: Get Terraform outputs
+        id: tf
         run: |
-          sam deploy \
-            --no-confirm-changeset \
-            --no-fail-on-empty-changeset
-        # Profile flag for Option B: add --profile oldforest
+          echo "site_bucket=$(terraform output -raw site_bucket_name)" >> "$GITHUB_OUTPUT"
+          echo "dist_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
 
       - name: Sync site to S3
+        working-directory: .
         run: |
-          BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name oldforest-net \
-            --query "Stacks[0].Outputs[?OutputKey=='SiteBucketName'].OutputValue" \
-            --output text)
-          aws s3 sync ./site s3://$BUCKET --delete
-        # Add --profile oldforest for Option B
+          aws s3 sync ./site s3://${{ steps.tf.outputs.site_bucket }} --delete
 
       - name: Invalidate CloudFront cache
         run: |
-          DIST_ID=$(aws cloudformation describe-stacks \
-            --stack-name oldforest-net \
-            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
-            --output text)
-          aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.tf.outputs.dist_id }} \
+            --paths "/*"
+        working-directory: .
