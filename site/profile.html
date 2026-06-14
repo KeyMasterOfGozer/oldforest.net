@@ -178,7 +178,9 @@ async function apiFetch(path, opts = {}) {
     },
   });
   if (res.status === 401) {
-    // Token expired — redirect to login and come back here after
+    // Token expired — clear stale tokens, force fresh login
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('id_token');
     sessionStorage.setItem('return_to', window.location.href);
     window.location.href = '/index.html';
     throw new Error('Session expired');
@@ -189,16 +191,18 @@ async function apiFetch(path, opts = {}) {
 }
 
 // ── Init ──────────────────────────────────────
-function init() {
-  const accessToken = sessionStorage.getItem('access_token');
-  const idToken     = sessionStorage.getItem('id_token');
+async function init() {
+  let accessToken = sessionStorage.getItem('access_token');
 
   if (!accessToken) {
     window.location.href = '/index.html';
     return;
   }
 
-  const idClaims = parseJWT(idToken || '');
+  // Proactively refresh so the token is always fresh on this page
+  await refreshTokens();
+
+  const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
   document.getElementById('f-email').value = idClaims.email || '';
   document.getElementById('f-name').value  = idClaims.name  || '';
 
