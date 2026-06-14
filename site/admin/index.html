@@ -730,8 +730,17 @@ function appFormFields(a) {
       <input type="text" id="a-desc" value="${esc(a?.description || '')}" placeholder="Short description">
     </div>
     <div class="form-group">
-      <label>Icon (emoji)</label>
-      <input type="text" id="a-icon" value="${esc(a?.icon || '🧩')}" placeholder="🧩" style="width:80px;">
+      <label>Icon <span style="font-weight:400;color:var(--muted);font-size:12px;">(paste or type a single emoji)</span></label>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <input type="text" id="a-icon" value="${esc(a?.icon || '🧩')}" placeholder="🧩" style="width:64px;font-size:22px;text-align:center;padding:4px 8px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${['🧩','🌳','📝','🔧','🗂️','📊','🔗','🌐','🛠️','⚙️','📷','🗺️','🎯','💡','🔒','📬'].map(e =>
+            `<button type="button" onclick="document.getElementById('a-icon').value='${e}'" title="${e}"
+              style="font-size:20px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 7px;cursor:pointer;line-height:1;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">${e}</button>`
+          ).join('')}
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Click a quick-pick above, or type/paste any emoji into the box.</div>
     </div>
     <div class="form-group">
       <label>URL *</label>
