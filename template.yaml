@@ -287,6 +287,45 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
+  ProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/profile/
+      Handler: index.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:GetUser
+                - cognito-idp:UpdateUserAttributes
+                - cognito-idp:ChangePassword
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        GetProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/profile
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        UpdateProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/profile
+            Method: PUT
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ChangePassword:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/profile/password
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
   UploadUrlFunction:
     Type: AWS::Serverless::Function
     Properties:

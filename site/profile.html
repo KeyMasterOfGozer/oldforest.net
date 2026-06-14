@@ -127,10 +127,7 @@
 'use strict';
 
 const CFG = {
-  cognitoDomain: 'auth-165395066552.auth.us-east-1.amazoncognito.com',
-  clientId:      '3ri08qut6b7db1n0j9317equ5e',
-  region:        'us-east-1',
-  redirectUri:   'https://oldforest.net/index.html',
+  apiBase: 'https://icqes4ud42.execute-api.us-east-1.amazonaws.com',
 };
 
 function parseJWT(token) {
@@ -145,18 +142,19 @@ function showAlert(id, message) {
   setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
 
-// ── Cognito API helper ─────────────────────────
-async function cognitoCall(target, body) {
-  const res = await fetch(`https://cognito-idp.${CFG.region}.amazonaws.com/`, {
-    method: 'POST',
+// ── API helper ────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const token = sessionStorage.getItem('access_token');
+  const res = await fetch(`${CFG.apiBase}${path}`, {
+    ...opts,
     headers: {
-      'Content-Type': 'application/x-amz-json-1.1',
-      'X-Amz-Target': `AmazonCognitoIdentityProviderService.${target}`,
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(opts.headers || {}),
     },
-    body: JSON.stringify(body),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || data.__type || `HTTP ${res.status}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
   return data;
 }
 
@@ -181,12 +179,10 @@ function init() {
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      await cognitoCall('UpdateUserAttributes', {
-        AccessToken: accessToken,
-        UserAttributes: [{ Name: 'name', Value: name }],
+      await apiFetch('/v1/profile', {
+        method: 'PUT',
+        body: JSON.stringify({ name }),
       });
-      // Update the stored ID token name so header reflects change immediately
-      // (full refresh of ID token requires re-login; update sessionStorage display value)
       showAlert('name-success');
     } catch (e) {
       showAlert('name-error', e.message);
@@ -219,10 +215,9 @@ function init() {
     btn.disabled = true;
     btn.textContent = 'Changing…';
     try {
-      await cognitoCall('ChangePassword', {
-        AccessToken: accessToken,
-        PreviousPassword: oldPw,
-        ProposedPassword: newPw,
+      await apiFetch('/v1/profile/password', {
+        method: 'POST',
+        body: JSON.stringify({ oldPassword: oldPw, newPassword: newPw }),
       });
       document.getElementById('f-old-pw').value     = '';
       document.getElementById('f-new-pw').value     = '';
