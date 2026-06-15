@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Old Forest</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Old Forest" href="https://oldforest.net/v1/feed.xml">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -56,7 +57,24 @@
 
     .post-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); }
     .badge-members { background: #2e1808; color: var(--members); border: 1px solid #5a3010; border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-    .tag { background: #162a10; color: var(--accent); border-radius: 20px; padding: 2px 10px; font-size: 12px; }
+    .tag { background: #162a10; color: var(--accent); border: 1px solid #2a4a18; border-radius: 20px; padding: 2px 10px; font-size: 12px; cursor: pointer; transition: background .15s; }
+    .tag:hover { background: #1e3a18; }
+    .tag.active { background: var(--accent); color: #0d1a0b; }
+
+    /* ── Tag cloud ── */
+    #tag-cloud { display: none; margin-bottom: 28px; }
+    #tag-cloud-inner { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    #tag-cloud-label { font-family: -apple-system, sans-serif; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+    .tag-cloud-item { display: inline-flex; align-items: center; gap: 5px; background: #162a10; color: var(--accent); border: 1px solid #2a4a18; border-radius: 20px; padding: 4px 12px; font-size: 13px; cursor: pointer; transition: background .15s; font-family: -apple-system, sans-serif; }
+    .tag-cloud-item:hover { background: #1e3a18; }
+    .tag-cloud-item.active { background: var(--accent); color: #0d1a0b; border-color: var(--accent); }
+    .tag-cloud-item .tag-count { font-size: 11px; opacity: .7; }
+
+    /* ── Tag filter banner ── */
+    #tag-filter-bar { display: none; align-items: center; gap: 10px; margin-bottom: 24px; padding: 10px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); font-family: -apple-system, sans-serif; font-size: 14px; color: var(--muted); }
+    #tag-filter-bar strong { color: var(--accent); }
+    #tag-filter-bar button { background: none; border: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
+    #tag-filter-bar button:hover { color: var(--text); }
 
     .post-card h2 { font-size: 22px; margin-bottom: 8px; line-height: 1.35; }
     .post-card h2 a { color: var(--text); }
@@ -89,6 +107,14 @@
     <h1>Old Forest</h1>
     <p>Stories and reflections from the digital forest.</p>
   </div>
+  <div id="tag-cloud">
+    <div id="tag-cloud-label">Filter by tag</div>
+    <div id="tag-cloud-inner"></div>
+  </div>
+  <div id="tag-filter-bar">
+    <span>Showing posts tagged: <strong id="active-tag-label"></strong></span>
+    <button onclick="clearTagFilter()" title="Clear filter">×</button>
+  </div>
   <div id="posts-list"><div class="loading">Loading…</div></div>
 </main>
 
@@ -103,6 +129,7 @@ const CFG = {
 };
 
 let accessToken = null;
+let allPosts = [];
 
 // ── PKCE ──────────────────────────────────────
 function b64url(buf) {
@@ -157,12 +184,77 @@ function parseJWT(token) {
   catch { return {}; }
 }
 
+// ── TAG FILTER ────────────────────────────────
+function filterByTag(tag) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('tag', tag);
+  history.pushState({}, '', url);
+  applyFilter();
+}
+
+function clearTagFilter() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('tag');
+  history.pushState({}, '', url);
+  applyFilter();
+}
+
+function buildTagCloud(posts) {
+  const counts = {};
+  posts.forEach(p => (p.tags ?? []).forEach(t => {
+    counts[t] = (counts[t] || 0) + 1;
+  }));
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  if (!sorted.length) return;
+
+  const activeTag = new URLSearchParams(window.location.search).get('tag');
+  document.getElementById('tag-cloud-inner').innerHTML = sorted.map(([t, n]) =>
+    `<span class="tag-cloud-item${t === activeTag ? ' active' : ''}" onclick="filterByTag('${esc(t)}')">${esc(t)} <span class="tag-count">${n}</span></span>`
+  ).join('');
+  document.getElementById('tag-cloud').style.display = 'block';
+}
+
+function applyFilter() {
+  const tag = new URLSearchParams(window.location.search).get('tag');
+  const bar = document.getElementById('tag-filter-bar');
+
+  // Update tag cloud active state
+  document.querySelectorAll('.tag-cloud-item').forEach(el => {
+    el.classList.toggle('active', el.textContent.trim().startsWith(tag || '\0'));
+  });
+  // Re-build so active highlight is accurate
+  buildTagCloud(allPosts);
+
+  if (tag) {
+    document.getElementById('active-tag-label').textContent = tag;
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
+  }
+
+  const filtered = tag
+    ? allPosts.filter(p => (p.tags ?? []).includes(tag))
+    : allPosts;
+  renderPosts(filtered);
+}
+
 // ── API ───────────────────────────────────────
 async function fetchPosts() {
   const res = await fetch(`${CFG.apiBase}/v1/posts`);
   if (!res.ok) throw new Error('Failed to load posts');
   const data = await res.json();
   return data.posts ?? [];
+}
+
+async function loadPosts() {
+  try {
+    allPosts = await fetchPosts();
+    buildTagCloud(allPosts);
+    applyFilter();
+  } catch (e) {
+    document.getElementById('posts-list').innerHTML =
+      '<div class="loading">Failed to load posts. Please try again.</div>';
+  }
 }
 
 // ── RENDER ────────────────────────────────────
@@ -193,7 +285,10 @@ function renderPosts(posts) {
   el.innerHTML = posts.map(p => {
     const isMembersOnly = p.visibility === 'members';
     const canRead = !isMembersOnly || member;
-    const tags = (p.tags ?? []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
+    const activeTag = new URLSearchParams(window.location.search).get('tag');
+    const tags = (p.tags ?? []).map(t =>
+      `<span class="tag${t === activeTag ? ' active' : ''}" onclick="filterByTag('${esc(t)}')" title="Filter by ${esc(t)}">${esc(t)}</span>`
+    ).join(' ');
     const gate = (!canRead)
       ? `<div class="members-gate-inline">🔒 Members only — <button class="btn-primary" onclick="login()">Sign in to read</button></div>`
       : '';
@@ -276,13 +371,7 @@ async function init() {
     btnAuth.onclick = login;
   }
 
-  try {
-    const posts = await fetchPosts();
-    renderPosts(posts);
-  } catch (e) {
-    document.getElementById('posts-list').innerHTML =
-      '<div class="loading">Failed to load posts. Please try again.</div>';
-  }
+  await loadPosts();
 }
 
 init();

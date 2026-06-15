@@ -374,3 +374,25 @@ resource "aws_apigatewayv2_route" "delete_admin_app" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
   target             = "integrations/${aws_apigatewayv2_integration.admin_apps.id}"
 }
+
+# ── rss-feed ──────────────────────────────────────────────────────────────────
+resource "aws_lambda_permission" "rss_feed" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.rss_feed.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "rss_feed" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.rss_feed.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "rss_feed" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /v1/feed.xml"
+  target    = "integrations/${aws_apigatewayv2_integration.rss_feed.id}"
+}

@@ -32,15 +32,22 @@ export const handler = async (event) => {
     };
   }
 
-  // Public list: published posts only, never personal
+  // Public list: published posts only, never personal; optional ?tag= filter
+  const tag = event.queryStringParameters?.tag;
+  const filterParts = ['#s = :published', 'visibility <> :personal'];
+  const exprNames  = { '#s': 'status' };
+  const exprValues = { ':published': 'published', ':personal': 'personal' };
+
+  if (tag) {
+    filterParts.push('contains(tags, :tag)');
+    exprValues[':tag'] = tag;
+  }
+
   const result = await client.send(new ScanCommand({
     TableName: process.env.POSTS_TABLE,
-    FilterExpression: '#s = :published AND visibility <> :personal',
-    ExpressionAttributeNames: { '#s': 'status' },
-    ExpressionAttributeValues: {
-      ':published': 'published',
-      ':personal': 'personal',
-    },
+    FilterExpression: filterParts.join(' AND '),
+    ExpressionAttributeNames: exprNames,
+    ExpressionAttributeValues: exprValues,
     ProjectionExpression: 'postId, slug, title, summary, author, createdAt, tags, visibility, thumbnail',
   }));
 

@@ -194,6 +194,28 @@ resource "aws_lambda_function" "admin_files" {
   }
 }
 
+# ── rss-feed ─────────────────────────────────────────────────────────────────
+data "archive_file" "rss_feed" {
+  type        = "zip"
+  source_dir  = "${path.module}/../src/functions/rss-feed"
+  output_path = "${path.module}/.lambda-zips/rss-feed.zip"
+}
+
+resource "aws_lambda_function" "rss_feed" {
+  function_name    = "oldforest-rss-feed"
+  role             = aws_iam_role.rss_feed.arn
+  runtime          = local.lambda_runtime
+  handler          = local.lambda_handler
+  timeout          = local.lambda_timeout
+  memory_size      = local.lambda_memory
+  filename         = data.archive_file.rss_feed.output_path
+  source_code_hash = data.archive_file.rss_feed.output_base64sha256
+
+  environment {
+    variables = { POSTS_TABLE = aws_dynamodb_table.posts.name }
+  }
+}
+
 # ── list-apps ────────────────────────────────────────────────────────────────
 data "archive_file" "list_apps" {
   type        = "zip"
