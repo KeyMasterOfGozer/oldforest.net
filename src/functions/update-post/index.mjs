@@ -41,23 +41,43 @@ export const handler = async (event) => {
     }));
   }
 
+  const updateExpr = [
+    '#t = :title',
+    'slug = :slug',
+    'summary = :summary',
+    'author = :author',
+    'updatedAt = :now',
+    '#s = :status',
+    'visibility = :visibility',
+    'tags = :tags',
+    'thumbnail = :thumbnail',
+    'authorSub = :authorSub',
+  ];
+  const exprValues = {
+    ':title':     body.title,
+    ':slug':      body.slug,
+    ':summary':   body.summary ?? '',
+    ':author':    body.author ?? '',
+    ':now':       now,
+    ':status':    body.status ?? 'draft',
+    ':visibility': body.visibility ?? 'public',
+    ':tags':      body.tags ?? [],
+    ':thumbnail': body.thumbnail ?? '',
+    ':authorSub': claims.sub,
+  };
+
+  // Allow overriding the original publish date (useful for imported posts)
+  if (body.createdAt) {
+    updateExpr.push('createdAt = :createdAt');
+    exprValues[':createdAt'] = body.createdAt;
+  }
+
   await dynamo.send(new UpdateCommand({
     TableName: process.env.POSTS_TABLE,
     Key: { postId },
-    UpdateExpression: 'SET #t = :title, slug = :slug, summary = :summary, author = :author, updatedAt = :now, #s = :status, visibility = :visibility, tags = :tags, thumbnail = :thumbnail, authorSub = :authorSub',
+    UpdateExpression: 'SET ' + updateExpr.join(', '),
     ExpressionAttributeNames: { '#t': 'title', '#s': 'status' },
-    ExpressionAttributeValues: {
-      ':title': body.title,
-      ':slug': body.slug,
-      ':summary': body.summary ?? '',
-      ':author': body.author ?? '',
-      ':now': now,
-      ':status': body.status ?? 'draft',
-      ':visibility': body.visibility ?? 'public',
-      ':tags': body.tags ?? [],
-      ':thumbnail': body.thumbnail ?? '',
-      ':authorSub': claims.sub,
-    },
+    ExpressionAttributeValues: exprValues,
   }));
 
   return { statusCode: 200, body: JSON.stringify({ postId, updatedAt: now }) };

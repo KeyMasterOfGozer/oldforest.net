@@ -150,6 +150,7 @@
           <th>Title</th>
           <th>Status</th>
           <th>Visibility</th>
+          <th>Created</th>
           <th>Updated</th>
           <th></th>
         </tr>
@@ -180,6 +181,10 @@
       <div class="form-group">
         <label for="f-slug">Slug</label>
         <input id="f-slug" type="text" placeholder="post-slug">
+      </div>
+      <div class="form-group">
+        <label for="f-created">Published Date</label>
+        <input id="f-created" type="datetime-local">
       </div>
       <div class="form-group">
         <label for="f-tags">Tags (comma-separated)</label>
@@ -409,6 +414,15 @@ function slugify(str) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+// Convert ISO string to datetime-local input value (local time)
+function isoToLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // ─────────────────────────────────────────────
 //  UI — POST LIST
 // ─────────────────────────────────────────────
@@ -448,6 +462,7 @@ async function loadPosts() {
         </td>
         <td><span class="badge badge-${p.status}">${esc(p.status)}</span></td>
         <td><span class="badge badge-${p.visibility}">${esc(p.visibility)}</span></td>
+        <td style="color:var(--muted);font-size:13px">${fmtDate(p.createdAt)}</td>
         <td style="color:var(--muted);font-size:13px">${fmtDate(p.updatedAt || p.createdAt)}</td>
         <td>
           <div class="row-actions">
@@ -524,6 +539,7 @@ function openEditor(post) {
 
   document.getElementById('f-title').value      = post?.title      ?? '';
   document.getElementById('f-slug').value       = post?.slug       ?? '';
+  document.getElementById('f-created').value    = isoToLocal(post?.createdAt ?? '');
   document.getElementById('f-summary').value    = post?.summary    ?? '';
   document.getElementById('f-tags').value       = (post?.tags ?? []).join(', ');
   document.getElementById('f-visibility').value = post?.visibility ?? 'public';
@@ -564,8 +580,9 @@ async function loadPostContent(slug) {
 }
 
 function collectFormData(status) {
-  const title = document.getElementById('f-title').value.trim();
-  const slug  = document.getElementById('f-slug').value.trim() || slugify(title);
+  const title   = document.getElementById('f-title').value.trim();
+  const slug    = document.getElementById('f-slug').value.trim() || slugify(title);
+  const created = document.getElementById('f-created').value;
   return {
     title,
     slug,
@@ -575,6 +592,8 @@ function collectFormData(status) {
     thumbnail:  document.getElementById('f-thumbnail').value.trim(),
     content:    easyMDE ? easyMDE.value() : document.getElementById('f-content').value,
     status,
+    // Only send createdAt when the field has a value (preserves existing date if left blank)
+    ...(created ? { createdAt: new Date(created).toISOString() } : {}),
   };
 }
 
