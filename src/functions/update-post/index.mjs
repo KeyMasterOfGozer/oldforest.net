@@ -44,7 +44,7 @@ export const handler = async (event) => {
   await dynamo.send(new UpdateCommand({
     TableName: process.env.POSTS_TABLE,
     Key: { postId },
-    UpdateExpression: 'SET #t = :title, slug = :slug, summary = :summary, author = :author, updatedAt = :now, #s = :status, visibility = :visibility, tags = :tags, thumbnail = :thumbnail',
+    UpdateExpression: 'SET #t = :title, slug = :slug, summary = :summary, author = :author, updatedAt = :now, #s = :status, visibility = :visibility, tags = :tags, thumbnail = :thumbnail, authorSub = :authorSub',
     ExpressionAttributeNames: { '#t': 'title', '#s': 'status' },
     ExpressionAttributeValues: {
       ':title': body.title,
@@ -56,6 +56,7 @@ export const handler = async (event) => {
       ':visibility': body.visibility ?? 'public',
       ':tags': body.tags ?? [],
       ':thumbnail': body.thumbnail ?? '',
+      ':authorSub': claims.sub,
     },
   }));
 

@@ -240,6 +240,26 @@ function applyFilter() {
 
 // ── API ───────────────────────────────────────
 async function fetchPosts() {
+  // Editors get the editor endpoint so personal posts are included
+  if (accessToken) {
+    const claims = parseJWT(accessToken);
+    const groups = claims['cognito:groups'] ?? [];
+    const isEditor = Array.isArray(groups) ? groups.includes('editors') : String(groups).includes('editors');
+    if (isEditor) {
+      const res = await fetch(`${CFG.apiBase}/v1/editor/posts`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const currentSub = claims.sub;
+        // Show: published posts of any visibility, plus personal posts that belong to this user
+        return (data.posts ?? []).filter(p =>
+          p.status === 'published' && (p.visibility !== 'personal' || p.authorSub === currentSub)
+        );
+      }
+    }
+  }
+  // Public fallback
   const res = await fetch(`${CFG.apiBase}/v1/posts`);
   if (!res.ok) throw new Error('Failed to load posts');
   const data = await res.json();
