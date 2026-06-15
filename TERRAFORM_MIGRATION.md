@@ -175,3 +175,43 @@ The OIDC deploy role (`AWS_DEPLOY_ROLE_ARN`) needs permission to read/write the 
 ```
 
 Push to `main` to trigger the first Terraform-based deploy.
+
+---
+
+## 9. Activate Managed Login + Passkeys (one-time, run after terraform apply)
+
+The Terraform AWS provider does not yet expose a resource for Cognito Managed Login branding or the `managed_login_version` domain setting, so these two steps must be run manually once after `terraform apply`.
+
+Get your User Pool ID and Client ID from Terraform outputs first:
+
+```bash
+cd infra
+USER_POOL_ID=$(AWS_PROFILE=oldforest terraform output -raw user_pool_id)
+CLIENT_ID=$(AWS_PROFILE=oldforest terraform output -raw user_pool_client_id)
+```
+
+**Step 1 — Create minimal branding (activates the Managed Login pages):**
+
+```bash
+AWS_PROFILE=oldforest aws cognito-idp create-managed-login-branding \
+  --user-pool-id "$USER_POOL_ID" \
+  --client-id "$CLIENT_ID" \
+  --use-cognito-provided-values \
+  --region us-east-1
+```
+
+**Step 2 — Switch the domain to Managed Login v2:**
+
+```bash
+AWS_PROFILE=oldforest aws cognito-idp update-user-pool-domain \
+  --domain "auth-165395066552" \
+  --user-pool-id "$USER_POOL_ID" \
+  --managed-login-version 2 \
+  --region us-east-1
+```
+
+After these two commands, the sign-in page will use Managed Login UI with passkey support.
+Users can register a passkey after signing in with their password the first time.
+
+> These steps are idempotent — running them again is safe. If Step 1 fails with
+> `ManagedLoginBrandingExistsException` the branding is already configured; skip to Step 2.

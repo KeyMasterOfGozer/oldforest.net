@@ -67,10 +67,9 @@ resource "aws_cognito_user_pool_client" "main" {
   allowed_oauth_flows_user_pool_client = true
 }
 
-# managed_login_version = 2 activates the Managed Login hosted UI,
-# which is required for passkey registration and sign-in.
 resource "aws_cognito_user_pool_domain" "main" {
-  domain                = "auth-${data.aws_caller_identity.current.account_id}"
-  user_pool_id          = aws_cognito_user_pool.main.id
-  managed_login_version = 2
+  domain       = "auth-${data.aws_caller_identity.current.account_id}"
+  user_pool_id = aws_cognito_user_pool.main.id
+  # Note: Managed Login v2 (required for passkeys) must be activated via CLI after apply.
+  # See TERRAFORM_MIGRATION.md for the two commands needed.
 }
