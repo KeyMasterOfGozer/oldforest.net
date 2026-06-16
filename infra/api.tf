@@ -396,3 +396,26 @@ resource "aws_apigatewayv2_route" "rss_feed" {
   route_key = "GET /v1/feed.xml"
   target    = "integrations/${aws_apigatewayv2_integration.rss_feed.id}"
 }
+
+# ── lt-proxy ──────────────────────────────────────────────────────────────────
+resource "aws_lambda_permission" "lt_proxy" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lt_proxy.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "lt_proxy" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.lt_proxy.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "lt_proxy" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /v1/proxy/librarything"
+  # No authorizer — LibraryThing data is public
+  target    = "integrations/${aws_apigatewayv2_integration.lt_proxy.id}"
+}

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Timeline — Old Forest</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/vis-timeline/7.7.3/vis-timeline-graph2d.min.css">
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/vis-timeline/7.7.3/vis-timeline-graph2d.min.js">
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1a0b;
+      --surface: #162414;
+      --border:  #2a3e20;
+      --text:    #e8d8b0;
+      --muted:   #859e6a;
+      --accent:  #78a84e;
+      --radius:  8px;
+    }
+
+    body { background: var(--bg); color: var(--text);
+           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
+    .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center;
+                    justify-content: space-between; height: 56px; }
+    .site-title { font-size: 18px; font-weight: 700; color: var(--accent);
+                  text-decoration: none; font-family: Georgia, serif; }
+    .header-links { display: flex; gap: 16px; font-size: 13px; }
+    .header-links a { color: var(--muted); text-decoration: none; }
+    .header-links a:hover { color: var(--accent); }
+
+    /* ── Main ── */
+    main { max-width: 1200px; margin: 0 auto; padding: 28px 24px 40px; }
+
+    h1 { font-size: 26px; color: var(--accent); margin-bottom: 6px; font-family: Georgia, serif; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+
+    /* ── Controls ── */
+    .controls { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .controls label { font-size: 13px; color: var(--muted); }
+    .controls select, .controls input[type="checkbox"] { accent-color: var(--accent); }
+    select {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); font-size: 13px; padding: 5px 10px; outline: none;
+    }
+    select:focus { border-color: var(--accent); }
+
+    /* ── Timeline container ── */
+    #timeline-wrap {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      min-height: 300px;
+    }
+    #loading { padding: 80px; text-align: center; color: var(--muted); font-size: 15px; }
+    #error   { padding: 60px; text-align: center; color: #c05848; font-size: 15px; }
+
+    /* ── Legend ── */
+    .legend { display: flex; gap: 20px; margin-top: 16px; flex-wrap: wrap; font-size: 13px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; }
+    .legend-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+    .dot-owned    { background: #5588cc; }
+    .dot-kindle   { background: #999; }
+    .dot-borrowed { background: #44aa66; }
+    .dot-current  { background: #cc4444; }
+
+    /* ── vis-timeline dark theme overrides ── */
+    .vis-timeline { background: var(--surface) !important; border: none !important; }
+    .vis-panel.vis-center, .vis-panel.vis-left, .vis-panel.vis-right,
+    .vis-panel.vis-top, .vis-panel.vis-bottom { border-color: var(--border) !important; }
+    .vis-time-axis .vis-text { color: var(--muted) !important; }
+    .vis-time-axis .vis-grid.vis-minor { border-color: #1e3018 !important; }
+    .vis-time-axis .vis-grid.vis-major { border-color: #2a3e20 !important; }
+    .vis-current-time { background: var(--accent) !important; }
+
+    /* Book item styles */
+    .vis-item { border-radius: 4px !important; border-width: 1px !important; font-size: 12px !important; }
+    .vis-item.owned    { background: #1a3460 !important; border-color: #5588cc !important; color: #aaccff !important; }
+    .vis-item.kindle   { background: #2a2a2a !important; border-color: #999 !important;    color: #ccc !important; }
+    .vis-item.borrowed { background: #1a3828 !important; border-color: #44aa66 !important; color: #88ddaa !important; }
+    .vis-item.current  { background: #3a1818 !important; border-color: #cc4444 !important; color: #ffaaaa !important; }
+
+    .vis-item.vis-selected.owned    { background: #2a4a80 !important; }
+    .vis-item.vis-selected.kindle   { background: #3a3a3a !important; }
+    .vis-item.vis-selected.borrowed { background: #1e4830 !important; }
+    .vis-item.vis-selected.current  { background: #4a2020 !important; }
+
+    /* Tooltip */
+    .vis-tooltip {
+      background: var(--surface) !important;
+      border: 1px solid var(--border) !important;
+      color: var(--text) !important;
+      padding: 10px 14px !important;
+      border-radius: var(--radius) !important;
+      font-size: 13px !important;
+      max-width: 280px !important;
+      line-height: 1.6 !important;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="site-title" href="/">🌳 Old Forest</a>
+    <div class="header-links">
+      <a href="/">Blog</a>
+      <a href="/apps.html">← Apps</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <h1>📚 Book Timeline</h1>
+  <p class="subtitle">Books read over the years, pulled from LibraryThing. Drag to scroll, scroll to zoom.</p>
+
+  <div class="controls">
+    <label>
+      Show:&nbsp;
+      <select id="filter-tag">
+        <option value="all">All books</option>
+        <option value="owned">Owned (blue)</option>
+        <option value="kindle">Kindle (grey)</option>
+        <option value="borrowed">Borrowed (green)</option>
+        <option value="current">Currently reading (red)</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="timeline-wrap">
+    <div id="loading">Loading books from LibraryThing…</div>
+    <div id="timeline" style="display:none"></div>
+  </div>
+
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot dot-owned"></span> Owned library</span>
+    <span class="legend-item"><span class="legend-dot dot-kindle"></span> Kindle</span>
+    <span class="legend-item"><span class="legend-dot dot-borrowed"></span> Borrowed</span>
+    <span class="legend-item"><span class="legend-dot dot-current"></span> Currently reading</span>
+  </div>
+</main>
+
+<script>
+'use strict';
+
+const API = '/v1/proxy/librarything';
+// Use the API base from other pages — adjust if needed
+const API_BASE = 'https://aijo86kijl.execute-api.us-east-1.amazonaws.com';
+
+let allItems = [];
+let dataset  = null;
+let timeline = null;
+
+function stampToDate(stamp) {
+  return (stamp && stamp > 0) ? new Date(stamp * 1000) : null;
+}
+
+function tagClass(tags) {
+  if (!tags) return 'owned';
+  const t = tags.map(s => String(s).toLowerCase());
+  if (t.includes('kindle'))   return 'kindle';
+  if (t.includes('borrowed')) return 'borrowed';
+  return 'owned';
+}
+
+function stars(rating) {
+  if (!rating || rating <= 0) return '';
+  return '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
+}
+
+function buildItems(books) {
+  const items = [];
+  let id = 0;
+  const now = new Date();
+  for (const key in books) {
+    const book = books[key];
+    const dates = book.startfinishdates;
+    if (!dates || !dates.length) continue;
+    const cls = tagClass(book.tags);
+    for (const d of dates) {
+      const start = stampToDate(d.started_stamp);
+      const end   = stampToDate(d.finished_stamp);
+      if (!start) continue;
+      const isCurrent = !end;
+      const effectiveClass = isCurrent ? 'current' : cls;
+      const effectiveEnd   = end ?? now;
+      const title = [
+        `<b>${book.title || 'Unknown'}</b>`,
+        book.author_fl ? `by ${book.author_fl}` : '',
+        stars(book.rating),
+        d.started_date  ? `Started:  ${d.started_date}`  : '',
+        d.finished_date ? `Finished: ${d.finished_date}` : '<i>Currently reading</i>',
+        (book.tags && book.tags.length) ? `Tags: ${book.tags.join(', ')}` : '',
+      ].filter(Boolean).join('<br>');
+      items.push({
+        id:        id++,
+        content:   book.title || 'Unknown',
+        start,
+        end:       effectiveEnd,
+        title,
+        className: effectiveClass,
+        _class:    effectiveClass,
+        _title:    book.title,
+      });
+    }
+  }
+  return items;
+}
+
+function applyFilter(filterVal) {
+  if (!dataset) return;
+  const filtered = filterVal === 'all'
+    ? allItems
+    : allItems.filter(it => it._class === filterVal);
+  dataset.clear();
+  dataset.add(filtered);
+  if (timeline && filtered.length) {
+    timeline.fit();
+  }
+}
+
+async function init() {
+  try {
+    const res = await fetch(`${API_BASE}${API}`);
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const data = await res.json();
+
+    const books = data.books;
+    if (!books) throw new Error('No book data returned');
+
+    allItems = buildItems(books);
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('timeline').style.display = 'block';
+
+    dataset = new vis.DataSet(allItems);
+
+    const options = {
+      orientation: { axis: 'top', item: 'bottom' },
+      stack: true,
+      selectable: true,
+      moveable: true,
+      zoomable: true,
+      zoomMin: 1000 * 60 * 60 * 24 * 30,      // min zoom: 1 month
+      zoomMax: 1000 * 60 * 60 * 24 * 365 * 50, // max zoom: 50 years
+      tooltip: { followMouse: true, overflowMethod: 'cap' },
+      margin: { item: { horizontal: 2, vertical: 4 } },
+    };
+
+    timeline = new vis.Timeline(
+      document.getElementById('timeline'),
+      dataset,
+      options,
+    );
+
+    document.getElementById('filter-tag').addEventListener('change', e => {
+      applyFilter(e.target.value);
+    });
+
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('timeline-wrap').innerHTML =
+      `<div id="error">Failed to load books: ${e.message}</div>`;
+    console.error(e);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

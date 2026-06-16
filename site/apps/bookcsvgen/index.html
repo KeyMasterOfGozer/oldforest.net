@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Stats — Old Forest</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1a0b;
+      --surface: #162414;
+      --border:  #2a3e20;
+      --text:    #e8d8b0;
+      --muted:   #859e6a;
+      --accent:  #78a84e;
+      --radius:  8px;
+    }
+
+    body { background: var(--bg); color: var(--text);
+           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
+    .header-inner { max-width: 960px; margin: 0 auto; display: flex; align-items: center;
+                    justify-content: space-between; height: 56px; }
+    .site-title { font-size: 18px; font-weight: 700; color: var(--accent);
+                  text-decoration: none; font-family: Georgia, serif; }
+    .header-links { display: flex; gap: 16px; font-size: 13px; }
+    .header-links a { color: var(--muted); text-decoration: none; }
+    .header-links a:hover { color: var(--accent); }
+
+    /* ── Main ── */
+    main { max-width: 960px; margin: 0 auto; padding: 28px 24px 60px; }
+    h1 { font-size: 26px; color: var(--accent); margin-bottom: 6px; font-family: Georgia, serif; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-block; cursor: pointer; border: none; border-radius: var(--radius);
+      font-size: 13px; font-weight: 600; padding: 8px 18px; transition: opacity .15s;
+      background: var(--accent); color: #0d1a0b; text-decoration: none;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── States ── */
+    #loading { padding: 60px; text-align: center; color: var(--muted); }
+    #error   { padding: 40px; text-align: center; color: #c05848; }
+
+    /* ── Section layout ── */
+    .sections { display: grid; grid-template-columns: 300px 1fr; gap: 32px; align-items: start; }
+    @media (max-width: 720px) { .sections { grid-template-columns: 1fr; } }
+
+    .section-title {
+      font-size: 16px; font-weight: 600; color: var(--accent); margin-bottom: 14px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th {
+      text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .4px;
+      padding: 8px 12px; border-bottom: 1px solid var(--border);
+    }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface); }
+
+    .num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .yr  { font-weight: 600; }
+
+    /* Readings table */
+    #readings-section { overflow: auto; max-height: 70vh; }
+    #readings-section table { min-width: 580px; }
+    .book-title  { font-weight: 500; max-width: 220px; }
+    .book-author { color: var(--muted); font-size: 13px; }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .toolbar input[type="search"] {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); font-size: 13px; padding: 6px 12px; outline: none; width: 220px;
+    }
+    .toolbar input[type="search"]:focus { border-color: var(--accent); }
+    .toolbar input[type="search"]::placeholder { color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="site-title" href="/">🌳 Old Forest</a>
+    <div class="header-links">
+      <a href="/">Blog</a>
+      <a href="/apps.html">← Apps</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <h1>📊 Book Stats &amp; CSV</h1>
+  <p class="subtitle">Reading history from LibraryThing — yearly stats and downloadable CSV.</p>
+
+  <div id="loading">Loading books from LibraryThing…</div>
+  <div id="error"   style="display:none"></div>
+  <div id="content" style="display:none">
+    <div class="sections">
+      <!-- Yearly stats (left column) -->
+      <div>
+        <div class="section-title">Yearly Stats</div>
+        <table id="stats-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th class="num">Books</th>
+              <th class="num">Avg days</th>
+            </tr>
+          </thead>
+          <tbody id="stats-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- All readings (right column) -->
+      <div>
+        <div class="toolbar">
+          <div class="section-title" style="margin:0;flex:1">All Reading Dates</div>
+          <input type="search" id="search" placeholder="Search title or author…">
+          <button class="btn" id="btn-download">⬇ Download CSV</button>
+        </div>
+        <div id="readings-section">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Started</th>
+                <th>Finished</th>
+                <th class="num">Days</th>
+              </tr>
+            </thead>
+            <tbody id="readings-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+'use strict';
+
+const API_BASE = 'https://aijo86kijl.execute-api.us-east-1.amazonaws.com';
+const API      = '/v1/proxy/librarything';
+
+let allReadings = [];
+let csvData     = '';
+
+function stampToDate(stamp) {
+  return (stamp && stamp > 0) ? new Date(stamp * 1000) : null;
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function csvCell(v) {
+  const s = String(v ?? '');
+  return (s.includes(',') || s.includes('"') || s.includes('\n'))
+    ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function processBooks(books) {
+  const readings = [];
+  for (const key in books) {
+    const book  = books[key];
+    const dates = book.startfinishdates;
+    if (!dates || !dates.length) continue;
+    for (const d of dates) {
+      const start  = stampToDate(d.started_stamp);
+      const finish = stampToDate(d.finished_stamp);
+      const end    = finish ?? new Date();
+      const days   = start ? Math.round((end - start) / 86_400_000) : null;
+      readings.push({
+        title:       book.title  || '',
+        author:      book.author_fl || '',
+        startStr:    d.started_date  || '',
+        finishStr:   d.finished_date || '',
+        start,
+        finish,
+        days,
+        year:        (finish ?? end).getFullYear(),
+      });
+    }
+  }
+  readings.sort((a, b) => (a.finish ?? new Date()) - (b.finish ?? new Date()));
+  return readings;
+}
+
+function buildStats(readings) {
+  const map = {};
+  for (const r of readings) {
+    if (!map[r.year]) map[r.year] = { count: 0, total: 0 };
+    map[r.year].count++;
+    map[r.year].total += r.days ?? 0;
+  }
+  return Object.entries(map)
+    .map(([yr, s]) => ({ year: +yr, count: s.count, avg: (s.total / s.count).toFixed(1) }))
+    .sort((a, b) => a.year - b.year);
+}
+
+function buildCsv(readings) {
+  const rows = [['Author','Title','Start','Finish','Duration (days)']];
+  for (const r of readings) {
+    rows.push([r.author, r.title, r.startStr, r.finishStr, r.days ?? '']);
+  }
+  return rows.map(row => row.map(csvCell).join(',')).join('\n');
+}
+
+function renderReadings(readings) {
+  const tbody = document.getElementById('readings-tbody');
+  if (!readings.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:24px">No results</td></tr>';
+    return;
+  }
+  tbody.innerHTML = readings.map(r => `
+    <tr>
+      <td class="book-title">${esc(r.title)}</td>
+      <td class="book-author">${esc(r.author)}</td>
+      <td>${esc(r.startStr)  || '—'}</td>
+      <td>${esc(r.finishStr) || '<i>reading</i>'}</td>
+      <td class="num">${r.days ?? '—'}</td>
+    </tr>`).join('');
+}
+
+function renderStats(stats) {
+  const tbody = document.getElementById('stats-tbody');
+  tbody.innerHTML = stats.map(s => `
+    <tr>
+      <td class="yr">${s.year}</td>
+      <td class="num">${s.count}</td>
+      <td class="num">${s.avg}</td>
+    </tr>`).join('');
+}
+
+function downloadCsv() {
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvData);
+  a.download = 'ReadingDates.csv';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function init() {
+  try {
+    const res = await fetch(`${API_BASE}${API}`);
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const data = await res.json();
+    if (!data.books) throw new Error('No book data returned');
+
+    allReadings = processBooks(data.books);
+    csvData     = buildCsv(allReadings);
+    const stats = buildStats(allReadings);
+
+    renderStats(stats);
+    renderReadings(allReadings);
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+
+    document.getElementById('btn-download').addEventListener('click', downloadCsv);
+
+    document.getElementById('search').addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      const filtered = q
+        ? allReadings.filter(r =>
+            r.title.toLowerCase().includes(q) || r.author.toLowerCase().includes(q))
+        : allReadings;
+      renderReadings(filtered);
+    });
+
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'block';
+    document.getElementById('error').textContent = `Failed to load books: ${e.message}`;
+    console.error(e);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

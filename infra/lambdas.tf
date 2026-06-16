@@ -260,6 +260,31 @@ resource "aws_lambda_function" "admin_apps" {
   }
 }
 
+# ── lt-proxy ─────────────────────────────────────────────────────────────────
+data "archive_file" "lt_proxy" {
+  type        = "zip"
+  source_dir  = "${path.module}/../src/functions/lt-proxy"
+  output_path = "${path.module}/.lambda-zips/lt-proxy.zip"
+}
+
+resource "aws_lambda_function" "lt_proxy" {
+  function_name    = "oldforest-lt-proxy"
+  role             = aws_iam_role.lt_proxy.arn
+  runtime          = local.lambda_runtime
+  handler          = local.lambda_handler
+  timeout          = 30   # LibraryThing can be slow
+  memory_size      = local.lambda_memory
+  filename         = data.archive_file.lt_proxy.output_path
+  source_code_hash = data.archive_file.lt_proxy.output_base64sha256
+
+  environment {
+    variables = {
+      LT_API_KEY = "2025452350"
+      LT_USER_ID = "KeyMasterOfGozer"
+    }
+  }
+}
+
 # ── admin-users ───────────────────────────────────────────────────────────────
 resource "aws_lambda_function" "admin_users" {
   function_name    = "oldforest-admin-users"

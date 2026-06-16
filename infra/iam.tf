@@ -339,3 +339,13 @@ resource "aws_iam_role_policy" "rss_feed" {
     }]
   })
 }
+
+# ── lt-proxy (LibraryThing proxy — outbound HTTPS only, no AWS resources) ─────
+resource "aws_iam_role" "lt_proxy" {
+  name               = "oldforest-lt-proxy"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+resource "aws_iam_role_policy_attachment" "lt_proxy_logs" {
+  role       = aws_iam_role.lt_proxy.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
