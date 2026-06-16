@@ -65,6 +65,16 @@ resource "aws_cognito_user_pool_client" "main" {
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["openid", "email", "profile", "aws.cognito.signin.user.admin"]
   allowed_oauth_flows_user_pool_client = true
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  access_token_validity  = 24   # 24 hours (Cognito max)
+  id_token_validity      = 24   # keep in sync with access token
+  refresh_token_validity = 30   # 30 days (unchanged)
 }
 
 resource "aws_cognito_user_pool_domain" "main" {

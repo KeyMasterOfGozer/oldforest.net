@@ -322,9 +322,52 @@ function parseJWT(token) {
   catch { return {}; }
 }
 
+function isTokenExpired(token) {
+  if (!token) return true;
+  const { exp } = parseJWT(token);
+  if (!exp) return false;
+  return (Date.now() / 1000) > (exp - 30);
+}
+
+async function refreshTokens() {
+  const rt = sessionStorage.getItem('refresh_token');
+  if (!rt) return false;
+  try {
+    const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id:     CFG.clientId,
+        refresh_token: rt,
+      }),
+    });
+    if (!res.ok) return false;
+    const t = await res.json();
+    accessToken = t.access_token;
+    sessionStorage.setItem('access_token', t.access_token);
+    if (t.id_token) sessionStorage.setItem('id_token', t.id_token);
+    return true;
+  } catch { return false; }
+}
+
+function handleSessionExpired() {
+  accessToken = null;
+  sessionStorage.clear();
+  const msg = document.getElementById('auth-msg');
+  if (msg) msg.textContent = 'Your session has expired. Please sign in again.';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('main-content').style.display = 'none';
+  toast('Session expired — please sign in again.', 'error');
+}
+
 // ── API ───────────────────────────────────────
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(`${CFG.apiBase}${path}`, {
+  if (isTokenExpired(accessToken)) {
+    if (!(await refreshTokens())) { handleSessionExpired(); throw new Error('Session expired'); }
+  }
+
+  const doFetch = () => fetch(`${CFG.apiBase}${path}`, {
     ...opts,
     headers: {
       'Content-Type': 'application/json',
@@ -332,6 +375,14 @@ async function apiFetch(path, opts = {}) {
       ...(opts.headers || {}),
     },
   });
+
+  let res = await doFetch();
+
+  if (res.status === 401) {
+    if (!(await refreshTokens())) { handleSessionExpired(); throw new Error('Session expired'); }
+    res = await doFetch();
+  }
+
   if (res.status === 204) return null;
   if (!res.ok) {
     const e = await res.json().catch(() => ({ message: res.statusText }));

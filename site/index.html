@@ -184,6 +184,35 @@ function parseJWT(token) {
   catch { return {}; }
 }
 
+function isTokenExpired(token) {
+  if (!token) return true;
+  const { exp } = parseJWT(token);
+  if (!exp) return false;
+  return (Date.now() / 1000) > (exp - 30); // 30s grace
+}
+
+async function refreshTokens() {
+  const rt = sessionStorage.getItem('refresh_token');
+  if (!rt) return false;
+  try {
+    const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id:     CFG.clientId,
+        refresh_token: rt,
+      }),
+    });
+    if (!res.ok) return false;
+    const t = await res.json();
+    accessToken = t.access_token;
+    sessionStorage.setItem('access_token', t.access_token);
+    if (t.id_token) sessionStorage.setItem('id_token', t.id_token);
+    return true;
+  } catch { return false; }
+}
+
 // ── TAG FILTER ────────────────────────────────
 function filterByTag(tag) {
   const url = new URL(window.location.href);
@@ -359,6 +388,17 @@ async function init() {
     }
   } else {
     accessToken = sessionStorage.getItem('access_token');
+  }
+
+  // Silently refresh if expired; clear session if refresh fails
+  if (accessToken && isTokenExpired(accessToken)) {
+    const ok = await refreshTokens();
+    if (!ok) {
+      accessToken = null;
+      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('id_token');
+      sessionStorage.removeItem('refresh_token');
+    }
   }
 
   // Update header
