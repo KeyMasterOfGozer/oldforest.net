@@ -21,7 +21,7 @@ APPS = [
         'icon':        '📚',
         'description': 'Reading history timeline — browse books read over the years, '
                        'colored by format (owned, Kindle, borrowed). Drag to scroll, scroll to zoom.',
-        'url':         '/apps/booktimeline/',
+        'url':         '/apps/booktimeline/index.html',
         'visibility':  'public',
         'external':    False,
         'order':       10,
@@ -31,7 +31,7 @@ APPS = [
         'icon':        '📊',
         'description': 'Yearly reading stats with average days per book, '
                        'plus a sortable table and downloadable CSV of all reading dates.',
-        'url':         '/apps/bookcsvgen/',
+        'url':         '/apps/bookcsvgen/index.html',
         'visibility':  'public',
         'external':    False,
         'order':       20,
