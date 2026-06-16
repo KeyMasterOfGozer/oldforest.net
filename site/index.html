@@ -63,9 +63,13 @@
 
     /* ── Tag cloud ── */
     #tag-cloud { display: none; margin-bottom: 28px; }
-    #tag-cloud-inner { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    #tag-cloud-label { font-family: -apple-system, sans-serif; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
-    .tag-cloud-item { display: inline-flex; align-items: center; gap: 5px; background: #162a10; color: var(--accent); border: 1px solid #2a4a18; border-radius: 20px; padding: 4px 12px; font-size: 13px; cursor: pointer; transition: background .15s; font-family: -apple-system, sans-serif; }
+    #tag-cloud-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    #tag-cloud-label { font-family: -apple-system, sans-serif; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    #tag-cloud-toggle { background: none; border: 1px solid var(--border); color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; padding: 2px 8px; border-radius: 4px; font-family: -apple-system, sans-serif; transition: color .15s, border-color .15s; }
+    #tag-cloud-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    #tag-cloud-inner { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; overflow: hidden; max-height: 36px; transition: max-height .3s ease; }
+    #tag-cloud-inner.expanded { max-height: 600px; }
+    .tag-cloud-item { display: inline-flex; align-items: center; gap: 5px; background: #162a10; color: var(--accent); border: 1px solid #2a4a18; border-radius: 20px; padding: 4px 12px; font-size: 13px; cursor: pointer; transition: background .15s; font-family: -apple-system, sans-serif; flex-shrink: 0; }
     .tag-cloud-item:hover { background: #1e3a18; }
     .tag-cloud-item.active { background: var(--accent); color: #0d1a0b; border-color: var(--accent); }
     .tag-cloud-item .tag-count { font-size: 11px; opacity: .7; }
@@ -108,7 +112,10 @@
     <p>Stories and reflections from the digital forest.</p>
   </div>
   <div id="tag-cloud">
-    <div id="tag-cloud-label">Filter by tag</div>
+    <div id="tag-cloud-header">
+      <div id="tag-cloud-label">Filter by tag</div>
+      <button id="tag-cloud-toggle" onclick="toggleTagCloud()" title="Show all tags">▾ more</button>
+    </div>
     <div id="tag-cloud-inner"></div>
   </div>
   <div id="tag-filter-bar">
@@ -213,6 +220,15 @@ async function refreshTokens() {
   } catch { return false; }
 }
 
+// ── TAG CLOUD TOGGLE ──────────────────────────
+function toggleTagCloud() {
+  const inner  = document.getElementById('tag-cloud-inner');
+  const btn    = document.getElementById('tag-cloud-toggle');
+  const expand = inner.classList.toggle('expanded');
+  btn.textContent = expand ? '▴ less' : '▾ more';
+  btn.title       = expand ? 'Collapse tags' : 'Show all tags';
+}
+
 // ── TAG FILTER ────────────────────────────────
 function filterByTag(tag) {
   const url = new URL(window.location.href);
@@ -241,6 +257,14 @@ function buildTagCloud(posts) {
     `<span class="tag-cloud-item${t === activeTag ? ' active' : ''}" onclick="filterByTag('${esc(t)}')">${esc(t)} <span class="tag-count">${n}</span></span>`
   ).join('');
   document.getElementById('tag-cloud').style.display = 'block';
+
+  // Hide toggle button if everything already fits in one row
+  const inner  = document.getElementById('tag-cloud-inner');
+  const toggle = document.getElementById('tag-cloud-toggle');
+  // Use requestAnimationFrame so the DOM has painted before we measure
+  requestAnimationFrame(() => {
+    toggle.style.display = inner.scrollHeight <= inner.clientHeight + 2 ? 'none' : '';
+  });
 }
 
 function applyFilter() {
