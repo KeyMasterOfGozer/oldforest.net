@@ -28,8 +28,8 @@
     header { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
     .header-left { display: flex; align-items: center; gap: 18px; }
     header h1 { font-size: 17px; font-weight: 600; color: var(--accent); }
-    .header-link { font-size: 13px; color: var(--muted); text-decoration: none; }
-    .header-link:hover { color: var(--accent); }
+    .nav-link { font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
+    .nav-link:hover { color: var(--accent); }
     .header-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); }
 
     /* ── Buttons ── */
@@ -174,9 +174,9 @@
 <header>
   <div class="header-left">
     <h1>🌳 Old Forest Admin</h1>
-    <a class="header-link" href="/">← View site</a>
-    <a class="header-link" href="/editor/index.html">Editor</a>
-    <a class="header-link" href="/apps.html">Apps</a>
+    <a class="nav-link" href="/">Blog</a>
+    <a class="nav-link" href="/editor/index.html">Editor</a>
+    <a class="nav-link" href="/apps.html">Apps</a>
   </div>
   <div class="header-right">
     <span id="user-name"></span>

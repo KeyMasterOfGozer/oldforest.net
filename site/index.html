@@ -30,8 +30,12 @@
     header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
     .header-inner { max-width: 780px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
     .site-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; }
-    .header-right { display: flex; align-items: center; gap: 14px; font-family: -apple-system, sans-serif; font-size: 14px; }
-    #user-email { color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 20px; font-family: -apple-system, sans-serif; }
+    #header-nav   { display: flex; align-items: center; gap: 14px; }
+    .header-auth  { display: flex; align-items: center; gap: 10px; }
+    #user-email { color: var(--muted); font-size: 13px; }
+    .nav-link { font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
+    .nav-link:hover { color: var(--accent); }
 
     /* ── Buttons ── */
     button { cursor: pointer; font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 500; border: none; border-radius: var(--radius); padding: 7px 16px; transition: opacity .15s; }
@@ -99,9 +103,13 @@
   <div class="header-inner">
     <a class="site-title" href="/">🌳 Old Forest</a>
     <div class="header-right">
-      <a href="/apps.html" style="font-family:-apple-system,sans-serif;font-size:13px;color:var(--muted);text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">Apps</a>
-      <span id="user-email"></span>
-      <button class="btn-outline" id="btn-auth">Sign in</button>
+      <div id="header-nav">
+        <a href="/apps.html" class="nav-link">Apps</a>
+      </div>
+      <div class="header-auth">
+        <span id="user-email"></span>
+        <button class="btn-outline" id="btn-auth">Sign in</button>
+      </div>
     </div>
   </div>
 </header>
@@ -440,15 +448,15 @@ async function init() {
       const editorLink = document.createElement('a');
       editorLink.href = '/editor/index.html';
       editorLink.textContent = 'Editor';
-      editorLink.style.cssText = 'font-family:-apple-system,sans-serif;font-size:13px;font-weight:500;color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 14px;';
-      document.querySelector('.header-right').insertBefore(editorLink, btnAuth);
+      editorLink.className = 'nav-link';
+      document.getElementById('header-nav').appendChild(editorLink);
     }
     if (groups.includes('admins')) {
       const adminLink = document.createElement('a');
       adminLink.href = '/admin/index.html';
       adminLink.textContent = 'Admin';
-      adminLink.style.cssText = 'font-family:-apple-system,sans-serif;font-size:13px;font-weight:500;color:#e07060;border:1px solid #5a2020;background:#2e1010;border-radius:6px;padding:6px 14px;';
-      document.querySelector('.header-right').insertBefore(adminLink, btnAuth);
+      adminLink.className = 'nav-link';
+      document.getElementById('header-nav').appendChild(adminLink);
     }
   } else {
     btnAuth.textContent = 'Sign in';
