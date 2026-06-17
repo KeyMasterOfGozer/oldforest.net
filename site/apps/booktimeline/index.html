@@ -64,6 +64,42 @@
     #loading { padding: 80px; text-align: center; color: var(--muted); font-size: 15px; }
     #error   { padding: 60px; text-align: center; color: #c05848; font-size: 15px; }
 
+    /* ── Overview / scrubber ── */
+    #overview-section { display: none; margin-top: 6px; }
+    .overview-label {
+      font-size: 11px; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .06em; margin-bottom: 4px;
+      font-family: -apple-system, sans-serif;
+    }
+    #overview-wrap {
+      position: relative;
+      height: 72px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: crosshair;
+    }
+    #overview { height: 100%; }
+    #viewport-indicator {
+      position: absolute;
+      top: 0; bottom: 0;
+      background: rgba(120, 168, 78, 0.15);
+      border-left:  2px solid var(--accent);
+      border-right: 2px solid var(--accent);
+      pointer-events: none;
+      z-index: 5;
+      transition: left .05s, right .05s;
+    }
+    /* Slim items in overview — bars only, no labels */
+    #overview .vis-item {
+      height: 10px !important;
+      min-height: 10px !important;
+      line-height: 10px !important;
+      border-radius: 2px !important;
+      border-width: 1px !important;
+    }
+    #overview .vis-item .vis-item-content { padding: 0 !important; font-size: 0 !important; }
+
     /* ── Legend ── */
     .legend { display: flex; gap: 20px; margin-top: 16px; flex-wrap: wrap; font-size: 13px; }
     .legend-item { display: flex; align-items: center; gap: 7px; }
@@ -140,6 +176,13 @@
     <div id="loading">Loading books from LibraryThing…</div>
     <div id="timeline" style="display:none"></div>
   </div>
+  <div id="overview-section">
+    <div class="overview-label">All time — click or drag to navigate</div>
+    <div id="overview-wrap">
+      <div id="overview"></div>
+      <div id="viewport-indicator"></div>
+    </div>
+  </div>
 
   <div class="legend">
     <span class="legend-item"><span class="legend-dot dot-owned"></span> Owned library</span>
@@ -152,13 +195,15 @@
 <script>
 'use strict';
 
-const API = '/v1/proxy/librarything';
-// Use the API base from other pages — adjust if needed
 const API_BASE = 'https://aijo86kijl.execute-api.us-east-1.amazonaws.com';
+const API      = '/v1/proxy/librarything';
 
-let allItems = [];
-let dataset  = null;
-let timeline = null;
+let allItems      = [];
+let dataset       = null;
+let mainTimeline  = null;
+let overviewTL    = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function stampToDate(stamp) {
   return (stamp && stamp > 0) ? new Date(stamp * 1000) : null;
@@ -182,7 +227,7 @@ function buildItems(books) {
   let id = 0;
   const now = new Date();
   for (const key in books) {
-    const book = books[key];
+    const book  = books[key];
     const dates = book.startfinishdates;
     if (!dates || !dates.length) continue;
     const cls = tagClass(book.tags);
@@ -190,10 +235,9 @@ function buildItems(books) {
       const start = stampToDate(d.started_stamp);
       const end   = stampToDate(d.finished_stamp);
       if (!start) continue;
-      const isCurrent = !end;
+      const isCurrent      = !end;
       const effectiveClass = isCurrent ? 'current' : cls;
-      const effectiveEnd   = end ?? now;
-      const title = [
+      const tooltip = [
         `<b>${book.title || 'Unknown'}</b>`,
         book.author_fl ? `by ${book.author_fl}` : '',
         stars(book.rating),
@@ -205,16 +249,76 @@ function buildItems(books) {
         id:        id++,
         content:   book.title || 'Unknown',
         start,
-        end:       effectiveEnd,
-        title,
+        end:       end ?? now,
+        title:     tooltip,
         className: effectiveClass,
         _class:    effectiveClass,
-        _title:    book.title,
       });
     }
   }
   return items;
 }
+
+// ── Viewport indicator ────────────────────────────────────────────────────────
+
+function updateViewport() {
+  if (!mainTimeline || !overviewTL) return;
+  const mnWin = mainTimeline.getWindow();
+  const ovWin = overviewTL.getWindow();
+  const totalMs = ovWin.end - ovWin.start;
+  if (totalMs <= 0) return;
+
+  const leftPct  = Math.max(0, Math.min(100, (mnWin.start - ovWin.start) / totalMs * 100));
+  const rightPct = Math.max(0, Math.min(100, (ovWin.end   - mnWin.end)   / totalMs * 100));
+
+  const ind = document.getElementById('viewport-indicator');
+  ind.style.left  = leftPct  + '%';
+  ind.style.right = rightPct + '%';
+}
+
+// ── Overview scrubber: click or drag to navigate main ─────────────────────────
+
+function jumpToTime(clientX) {
+  const wrap   = document.getElementById('overview-wrap');
+  const rect   = wrap.getBoundingClientRect();
+  const pct    = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const ovWin  = overviewTL.getWindow();
+  const time   = new Date(ovWin.start.getTime() + pct * (ovWin.end - ovWin.start));
+  const mnWin  = mainTimeline.getWindow();
+  const halfDur = (mnWin.end - mnWin.start) / 2;
+  mainTimeline.setWindow(
+    new Date(time - halfDur),
+    new Date(time + halfDur),
+    { animation: { duration: 250, easingFunction: 'easeInOutQuad' } }
+  );
+}
+
+function setupOverviewNav() {
+  const wrap = document.getElementById('overview-wrap');
+  let dragging = false;
+
+  wrap.addEventListener('mousedown', e => {
+    dragging = true;
+    jumpToTime(e.clientX);
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (dragging) jumpToTime(e.clientX);
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+
+  // Touch support
+  wrap.addEventListener('touchstart', e => {
+    jumpToTime(e.touches[0].clientX);
+    e.preventDefault();
+  }, { passive: false });
+  wrap.addEventListener('touchmove', e => {
+    jumpToTime(e.touches[0].clientX);
+    e.preventDefault();
+  }, { passive: false });
+}
+
+// ── Filter ────────────────────────────────────────────────────────────────────
 
 function applyFilter(filterVal) {
   if (!dataset) return;
@@ -223,44 +327,84 @@ function applyFilter(filterVal) {
     : allItems.filter(it => it._class === filterVal);
   dataset.clear();
   dataset.add(filtered);
-  if (timeline && filtered.length) {
-    timeline.fit();
-  }
+  if (mainTimeline && filtered.length) mainTimeline.fit();
+  if (overviewTL   && filtered.length) overviewTL.fit();
+  updateViewport();
 }
+
+// ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
   try {
     const res = await fetch(`${API_BASE}${API}`);
     if (!res.ok) throw new Error(`API error ${res.status}`);
     const data = await res.json();
+    if (!data.books) throw new Error('No book data returned');
 
-    const books = data.books;
-    if (!books) throw new Error('No book data returned');
+    allItems = buildItems(data.books);
+    dataset  = new vis.DataSet(allItems);
 
-    allItems = buildItems(books);
+    // ── Default window: last 18 months ──
+    // Find the most-recent finished date so the default view ends just past it.
+    const finishedDates = allItems
+      .filter(it => it._class !== 'current')
+      .map(it => it.end.getTime());
+    const latestMs  = finishedDates.length ? Math.max(...finishedDates) : Date.now();
+    const latest    = new Date(latestMs + 30  * 24 * 3600 * 1000);   // +1 month padding
+    const earliest  = new Date(latestMs - 548 * 24 * 3600 * 1000);   // −18 months
 
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('timeline').style.display = 'block';
-
-    dataset = new vis.DataSet(allItems);
-
-    const options = {
+    // ── Main timeline ──
+    const mainOptions = {
+      start:  earliest,
+      end:    latest,
       orientation: { axis: 'top', item: 'bottom' },
-      stack: true,
-      selectable: true,
-      moveable: true,
-      zoomable: true,
-      zoomMin: 1000 * 60 * 60 * 24 * 30,      // min zoom: 1 month
-      zoomMax: 1000 * 60 * 60 * 24 * 365 * 50, // max zoom: 50 years
-      tooltip: { followMouse: true, overflowMethod: 'cap' },
-      margin: { item: { horizontal: 2, vertical: 4 } },
+      stack:       true,
+      selectable:  true,
+      moveable:    true,
+      zoomable:    true,
+      zoomMin: 1000 * 60 * 60 * 24 * 14,        // min zoom: 2 weeks
+      zoomMax: 1000 * 60 * 60 * 24 * 365 * 5,   // max zoom: 5 years
+      tooltip:  { followMouse: true, overflowMethod: 'cap' },
+      margin:   { item: { horizontal: 2, vertical: 4 } },
     };
 
-    timeline = new vis.Timeline(
+    document.getElementById('loading').style.display  = 'none';
+    document.getElementById('timeline').style.display = 'block';
+    document.getElementById('overview-section').style.display = 'block';
+
+    mainTimeline = new vis.Timeline(
       document.getElementById('timeline'),
       dataset,
-      options,
+      mainOptions,
     );
+
+    // ── Overview timeline ──
+    const ovOptions = {
+      orientation: { axis: 'bottom', item: 'top' },
+      stack:        false,
+      selectable:   false,
+      moveable:     false,   // overview position is fixed; we navigate via mouse events
+      zoomable:     false,
+      showCurrentTime: false,
+      showMinorLabels: true,
+      showMajorLabels: true,
+      tooltip:         { followMouse: false, overflowMethod: 'cap' },
+      margin:          { item: { horizontal: 0, vertical: 1 } },
+    };
+
+    overviewTL = new vis.Timeline(
+      document.getElementById('overview'),
+      dataset,
+      ovOptions,
+    );
+    overviewTL.fit();
+
+    // Keep viewport indicator in sync with main
+    mainTimeline.on('rangechanged', updateViewport);
+    mainTimeline.on('rangechange',  updateViewport);
+    updateViewport();
+
+    setupOverviewNav();
 
     document.getElementById('filter-tag').addEventListener('change', e => {
       applyFilter(e.target.value);
