@@ -397,6 +397,91 @@ resource "aws_apigatewayv2_route" "rss_feed" {
   target    = "integrations/${aws_apigatewayv2_integration.rss_feed.id}"
 }
 
+# ── reading-log ───────────────────────────────────────────────────────────────
+
+resource "aws_lambda_permission" "reading_log" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.reading_log.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "reading_log" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.reading_log.invoke_arn
+  payload_format_version = "2.0"
+}
+
+# Public routes (timeline, book detail)
+resource "aws_apigatewayv2_route" "reading_list_books" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /v1/reading/books"
+  target    = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
+resource "aws_apigatewayv2_route" "reading_get_book" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /v1/reading/books/{bookId}"
+  target    = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
+resource "aws_apigatewayv2_route" "reading_list_reads" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /v1/reading/reads"
+  target    = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
+# Editor routes (require JWT)
+resource "aws_apigatewayv2_route" "reading_create_book" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /v1/reading/books"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
+resource "aws_apigatewayv2_route" "reading_update_book" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "PUT /v1/reading/books/{bookId}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
+resource "aws_apigatewayv2_route" "reading_delete_book" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "DELETE /v1/reading/books/{bookId}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
+resource "aws_apigatewayv2_route" "reading_create_read" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /v1/reading/reads"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
+resource "aws_apigatewayv2_route" "reading_update_read" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "PUT /v1/reading/reads/{readId}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
+resource "aws_apigatewayv2_route" "reading_delete_read" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "DELETE /v1/reading/reads/{readId}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.reading_log.id}"
+}
+
 # ── lt-proxy ──────────────────────────────────────────────────────────────────
 resource "aws_lambda_permission" "lt_proxy" {
   statement_id  = "AllowAPIGateway"

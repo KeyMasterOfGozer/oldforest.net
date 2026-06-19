@@ -53,6 +53,7 @@ resource "aws_cognito_user_pool_client" "main" {
     "https://${var.domain_name}/index.html",
     "https://${var.domain_name}/admin/index.html",
     "https://${var.domain_name}/apps.html",
+    "https://${var.domain_name}/apps/reading-log/",
   ]
 
   logout_urls = [
@@ -60,6 +61,7 @@ resource "aws_cognito_user_pool_client" "main" {
     "https://${var.domain_name}/index.html",
     "https://${var.domain_name}/admin/index.html",
     "https://${var.domain_name}/apps.html",
+    "https://${var.domain_name}/apps/reading-log/",
   ]
 
   allowed_oauth_flows                  = ["code"]

@@ -138,7 +138,7 @@
 
 <main>
   <h1>📚 Book Timeline</h1>
-  <p class="subtitle">Books read over the years, pulled from LibraryThing. Drag to scroll, scroll to zoom.</p>
+  <p class="subtitle">Books read over the years. Drag to scroll, scroll to zoom.</p>
 
   <div class="controls">
     <label>
@@ -154,7 +154,7 @@
   </div>
 
   <div id="timeline-wrap">
-    <div id="loading">Loading books from LibraryThing…</div>
+    <div id="loading">Loading reading history…</div>
     <div id="timeline" style="display:none"></div>
   </div>
   <div id="overview-section">
@@ -174,7 +174,7 @@
 'use strict';
 
 const API_BASE = 'https://aijo86kijl.execute-api.us-east-1.amazonaws.com';
-const API      = '/v1/proxy/librarything';
+const API      = '/v1/reading/reads';
 
 let allItems     = [];
 let dataset      = null;
@@ -184,15 +184,19 @@ let scrubMax     = 0;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function stampToDate(stamp) {
-  return (stamp && stamp > 0) ? new Date(stamp * 1000) : null;
+function isoToDate(iso) {
+  // Accepts YYYY-MM-DD or full ISO string
+  return iso ? new Date(iso.length === 10 ? iso + 'T12:00:00Z' : iso) : null;
 }
 
-function tagClass(tags) {
-  if (!tags) return 'owned';
-  const t = tags.map(s => String(s).toLowerCase());
-  if (t.includes('kindle'))   return 'kindle';
-  if (t.includes('borrowed')) return 'borrowed';
+function readClass(read) {
+  if (!read.book) return 'owned';
+  const tags   = (read.book.tags ?? []).map(s => String(s).toLowerCase());
+  const format = (read.format ?? '').toLowerCase();
+  if (format === 'kindle')          return 'kindle';
+  if (format === 'audiobook')       return 'kindle';   // same neutral style
+  if (tags.includes('borrowed'))    return 'borrowed';
+  if (tags.includes('kindle'))      return 'kindle';
   return 'owned';
 }
 
@@ -201,39 +205,45 @@ function stars(rating) {
   return '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
 }
 
-function buildItems(books) {
+function buildItems(reads) {
   const items = [];
   let id = 0;
   const now = new Date();
-  for (const key in books) {
-    const book  = books[key];
-    const dates = book.startfinishdates;
-    if (!dates || !dates.length) continue;
-    const cls = tagClass(book.tags);
-    for (const d of dates) {
-      const start = stampToDate(d.started_stamp);
-      const end   = stampToDate(d.finished_stamp);
-      if (!start) continue;
-      const isCurrent      = !end;
-      const effectiveClass = isCurrent ? 'current' : cls;
-      const tooltip = [
-        `<b>${book.title || 'Unknown'}</b>`,
-        book.author_fl ? `by ${book.author_fl}` : '',
-        stars(book.rating),
-        d.started_date  ? `Started:  ${d.started_date}`  : '',
-        d.finished_date ? `Finished: ${d.finished_date}` : '<i>Currently reading</i>',
-        (book.tags && book.tags.length) ? `Tags: ${book.tags.join(', ')}` : '',
-      ].filter(Boolean).join('<br>');
-      items.push({
-        id:        id++,
-        content:   book.title || 'Unknown',
-        start,
-        end:       end ?? now,
-        title:     tooltip,
-        className: effectiveClass,
-        _class:    effectiveClass,
-      });
-    }
+  for (const read of reads) {
+    const start = isoToDate(read.started);
+    const end   = isoToDate(read.finished);
+    if (!start && !end) continue;
+    const effectiveStart = start ?? end;  // use finish as point if no start
+    const isCurrent      = !end;
+    const book           = read.book ?? {};
+    const cls            = isCurrent ? 'current' : readClass(read);
+    const grLink         = book.goodreadsUrl
+      ? `<a href="${book.goodreadsUrl}" target="_blank" style="color:#96c860">GoodReads ↗</a>`
+      : (book.title
+          ? `<a href="https://www.goodreads.com/search?q=${encodeURIComponent(book.title + ' ' + (book.author ?? ''))}" target="_blank" style="color:#859e6a">Search GoodReads ↗</a>`
+          : '');
+    const starsHtml = stars(read.rating);
+    const tags = book.tags ?? [];
+    const tooltip = [
+      `<b>${book.title || 'Unknown'}</b>`,
+      book.author  ? `by ${book.author}`             : '',
+      read.format  ? `Format: ${read.format}`        : '',
+      starsHtml,
+      read.started  ? `Started:  ${read.started}`   : '',
+      read.finished ? `Finished: ${read.finished}`  : '<i>Currently reading</i>',
+      read.review   ? `<i>${read.review.substring(0,120)}${read.review.length > 120 ? '…' : ''}</i>` : '',
+      tags.length   ? `Tags: ${tags.join(', ')}`     : '',
+      grLink,
+    ].filter(Boolean).join('<br>');
+    items.push({
+      id:        id++,
+      content:   book.title || 'Unknown',
+      start:     effectiveStart,
+      end:       end ?? now,
+      title:     tooltip,
+      className: cls,
+      _class:    cls,
+    });
   }
   return items;
 }
@@ -357,11 +367,14 @@ function applyFilter(filterVal) {
 async function init() {
   try {
     const res = await fetch(`${API_BASE}${API}`);
-    if (!res.ok) throw new Error(`API error ${res.status}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(`API error ${res.status}: ${body.error ?? ''}`);
+    }
     const data = await res.json();
-    if (!data.books) throw new Error('No book data returned');
+    if (!data.reads) throw new Error('No reading data returned');
 
-    allItems = buildItems(data.books);
+    allItems = buildItems(data.reads);
     dataset  = new vis.DataSet(allItems);
 
     // ── Scrubber time bounds ──

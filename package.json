@@ -1,0 +1,28 @@
+{
+  "name": "oldforest.net",
+  "version": "1.0.0",
+  "description": "A fully serverless blog and community platform hosted on AWS. All infrastructure is defined in Terraform, deployments are automated via GitHub Actions, and there is no web server — the frontend is static HTML served from S3 through CloudFront.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KeyMasterOfGozer/oldforest.net.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/KeyMasterOfGozer/oldforest.net/issues"
+  },
+  "homepage": "https://github.com/KeyMasterOfGozer/oldforest.net#readme",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1072.0",
+    "@aws-sdk/lib-dynamodb": "^3.1072.0"
+  }
+}

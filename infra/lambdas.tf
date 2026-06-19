@@ -260,6 +260,31 @@ resource "aws_lambda_function" "admin_apps" {
   }
 }
 
+# ── reading-log ───────────────────────────────────────────────────────────────
+data "archive_file" "reading_log" {
+  type        = "zip"
+  source_dir  = "${path.module}/../src/functions/reading-log"
+  output_path = "${path.module}/.lambda-zips/reading-log.zip"
+}
+
+resource "aws_lambda_function" "reading_log" {
+  function_name    = "oldforest-reading-log"
+  role             = aws_iam_role.reading_log.arn
+  runtime          = local.lambda_runtime
+  handler          = local.lambda_handler
+  timeout          = local.lambda_timeout
+  memory_size      = local.lambda_memory
+  filename         = data.archive_file.reading_log.output_path
+  source_code_hash = data.archive_file.reading_log.output_base64sha256
+
+  environment {
+    variables = {
+      BOOKS_TABLE = aws_dynamodb_table.books.name
+      READS_TABLE = aws_dynamodb_table.reads.name
+    }
+  }
+}
+
 # ── lt-proxy ─────────────────────────────────────────────────────────────────
 data "archive_file" "lt_proxy" {
   type        = "zip"

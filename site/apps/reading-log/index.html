@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reading Log — Old Forest</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1a0b;
+      --surface:  #162414;
+      --surface2: #1d2e1a;
+      --border:   #2a3e20;
+      --text:     #e8d8b0;
+      --muted:    #859e6a;
+      --accent:   #78a84e;
+      --accent2:  #96c860;
+      --danger:   #c04040;
+      --radius:   8px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent2); text-decoration: underline; }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
+    .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+    .site-title { font-size: 20px; font-weight: 700; color: var(--accent); font-family: Georgia, serif; }
+    .header-right { display: flex; align-items: center; gap: 20px; }
+    #header-nav { display: flex; align-items: center; gap: 14px; }
+    .header-auth { display: flex; align-items: center; gap: 10px; }
+    .nav-link { font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
+    .nav-link:hover { color: var(--accent); }
+    #user-email { font-size: 13px; color: var(--muted); }
+
+    button { cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; border: none; border-radius: var(--radius); padding: 6px 14px; transition: opacity .15s; }
+    button:hover { opacity: .85; }
+    .btn-primary  { background: var(--accent); color: #0d1a0b; }
+    .btn-outline  { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .btn-danger   { background: var(--danger); color: #fff; }
+    .btn-sm       { padding: 4px 10px; font-size: 12px; }
+    button:disabled { opacity: .4; cursor: default; }
+
+    /* ── Layout ── */
+    #app { display: none; max-width: 1200px; margin: 0 auto; padding: 24px; gap: 24px; }
+    #app.visible { display: grid; grid-template-columns: 340px 1fr; grid-template-rows: auto 1fr; min-height: calc(100vh - 56px); }
+
+    #auth-wall { max-width: 400px; margin: 80px auto; text-align: center; color: var(--muted); }
+    #auth-wall h2 { color: var(--text); margin-bottom: 12px; }
+    #auth-wall p  { margin-bottom: 20px; }
+
+    /* ── Left panel: search + book list ── */
+    #panel-search { grid-column: 1; grid-row: 1 / 3; display: flex; flex-direction: column; gap: 12px; }
+
+    .panel-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .panel-box h3 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+
+    #search-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px; padding: 8px 10px; outline: none; }
+    #search-input:focus { border-color: var(--accent); }
+    #search-input::placeholder { color: var(--muted); }
+    #tag-filter-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; min-height: 0; }
+    #tag-filter-bar:empty { display: none; }
+    .tag-filter-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: pointer; color: var(--muted); transition: background .1s, color .1s; }
+    .tag-filter-pill:hover { border-color: var(--accent); color: var(--text); }
+    .tag-filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    #book-list { max-height: calc(100vh - 280px); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+    .book-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background .1s; }
+    .book-item:hover, .book-item.active { background: var(--surface2); }
+    .book-item.active { border-left: 3px solid var(--accent); padding-left: 7px; }
+    .book-thumb { width: 32px; height: 46px; object-fit: cover; border-radius: 3px; background: var(--border); flex-shrink: 0; }
+    .book-thumb-placeholder { width: 32px; height: 46px; background: var(--border); border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .book-item-info { min-width: 0; }
+    .book-item-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+    .book-item-author { color: var(--muted); font-size: 12px; }
+
+    /* ── Right panel: book detail + reads ── */
+    #panel-detail { grid-column: 2; grid-row: 1; }
+    #panel-reads  { grid-column: 2; grid-row: 2; }
+
+    .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .panel-header h2 { font-size: 18px; color: var(--accent); font-family: Georgia, serif; }
+
+    /* ── Book detail form ── */
+    #book-detail { display: none; }
+    #book-detail.visible { display: block; }
+
+    .book-meta-layout { display: grid; grid-template-columns: 80px 1fr; gap: 16px; margin-bottom: 20px; }
+    .book-cover-large { width: 80px; height: 116px; object-fit: cover; border-radius: 4px; background: var(--border); }
+    .book-cover-placeholder { width: 80px; height: 116px; background: var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-grid .full-width { grid-column: 1 / -1; }
+
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    input[type=text], input[type=url], input[type=number], textarea, select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 60px; }
+    select option { background: var(--surface); }
+
+    .tags-input-wrap { display: flex; flex-wrap: wrap; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; min-height: 38px; align-items: center; }
+    .tags-input-wrap:focus-within { border-color: var(--accent); }
+    .tag-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+    .tag-chip button { background: none; border: none; padding: 0; color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; }
+    .tag-chip button:hover { color: var(--danger); }
+    #tag-input { background: none; border: none; outline: none; color: var(--text); font-size: 13px; flex: 1; min-width: 80px; padding: 0; }
+
+    .form-actions { display: flex; gap: 10px; margin-top: 14px; }
+
+    /* ── Google Books search results ── */
+    #gb-results { margin-top: 10px; display: none; flex-direction: column; gap: 4px; }
+    #gb-results.visible { display: flex; }
+    .gb-result { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: border-color .1s; }
+    .gb-result:hover { border-color: var(--accent); }
+    .gb-thumb { width: 28px; height: 40px; object-fit: cover; border-radius: 2px; background: var(--border); flex-shrink: 0; }
+    .gb-info { min-width: 0; }
+    .gb-title { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gb-author { font-size: 12px; color: var(--muted); }
+
+    /* ── Reads section ── */
+    #reads-section { display: none; }
+    #reads-section.visible { display: block; }
+
+    #reads-table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .star-display { color: #c8a040; letter-spacing: 1px; }
+
+    /* ── Read form ── */
+    #read-form-wrap { display: none; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-top: 16px; }
+    #read-form-wrap.visible { display: block; }
+    #read-form-wrap h4 { margin-bottom: 12px; font-size: 14px; color: var(--text); }
+    .read-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .read-form-grid .span2 { grid-column: span 2; }
+    .read-form-grid input[type="date"] { min-width: 0; width: 100%; }
+    .star-picker { display: flex; gap: 4px; padding-top: 2px; }
+    .star-picker span { font-size: 22px; cursor: pointer; color: var(--border); line-height: 1; }
+    .star-picker span.on { color: #c8a040; }
+    .read-form-actions { display: flex; gap: 10px; margin-top: 12px; }
+
+    /* ── Empty / loading states ── */
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty-state h3 { color: var(--text); margin-bottom: 6px; }
+
+    /* ── Notification ── */
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 18px; font-size: 13px; color: var(--text); box-shadow: 0 4px 20px rgba(0,0,0,.5); opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; pointer-events: none; z-index: 100; }
+    #toast.show { opacity: 1; transform: none; }
+    #toast.error { border-color: var(--danger); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="site-title" href="/">🌳 Old Forest</a>
+    <div class="header-right">
+      <div id="header-nav">
+        <a href="/" class="nav-link">Blog</a>
+        <a href="/apps.html" class="nav-link">Apps</a>
+      </div>
+      <div class="header-auth">
+        <span id="user-email"></span>
+        <button class="btn-outline" id="btn-auth">Sign in</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div id="auth-wall">
+  <h2>Reading Log</h2>
+  <p>Sign in with an editor account to manage reading entries.</p>
+  <button class="btn-primary" onclick="login()">Sign in</button>
+</div>
+
+<div id="app">
+  <!-- Left: search + book list -->
+  <div id="panel-search">
+    <div class="panel-box">
+      <h3>Books</h3>
+      <input id="search-input" type="text" placeholder="Filter by title or author…" autocomplete="off">
+      <div id="tag-filter-bar"></div>
+    </div>
+    <div class="panel-box" style="flex:1; overflow:hidden; display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <h3 style="margin:0;">Library</h3>
+        <button class="btn-primary btn-sm" id="btn-new-book">+ New Book</button>
+      </div>
+      <div id="book-list"><div class="empty-state"><p>Loading…</p></div></div>
+    </div>
+  </div>
+
+  <!-- Right top: book detail form -->
+  <div id="panel-detail">
+    <div class="panel-box">
+      <div id="no-book-selected" class="empty-state">
+        <h3>Select a book</h3>
+        <p>Pick a book from the list, or create a new one.</p>
+      </div>
+
+      <div id="book-detail">
+        <div class="panel-header">
+          <h2 id="detail-heading">New Book</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-sm btn-outline" id="btn-gb-search">Search Books</button>
+            <button class="btn-danger btn-sm" id="btn-delete-book" style="display:none">Delete Book</button>
+          </div>
+        </div>
+
+        <!-- Google Books results -->
+        <div id="gb-results"></div>
+
+        <!-- Book form -->
+        <form id="book-form" onsubmit="saveBook(event)">
+          <div class="book-meta-layout">
+            <div>
+              <img id="book-cover-img" class="book-cover-large" style="display:none" src="" alt="">
+              <div id="book-cover-ph" class="book-cover-placeholder">📚</div>
+            </div>
+            <div class="form-grid">
+              <div class="full-width">
+                <label>Title *</label>
+                <input id="f-title" type="text" required>
+              </div>
+              <div class="full-width">
+                <label>Author *</label>
+                <input id="f-author" type="text" required>
+              </div>
+              <div>
+                <label>Page Count</label>
+                <input id="f-pages" type="number" min="1">
+              </div>
+              <div>
+                <label>ISBN</label>
+                <input id="f-isbn" type="text">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div>
+              <label>Google Books ID</label>
+              <input id="f-gbid" type="text">
+            </div>
+            <div>
+              <label>GoodReads URL</label>
+              <input id="f-grurl" type="url" placeholder="https://www.goodreads.com/book/show/…">
+            </div>
+            <div class="full-width">
+              <label>Cover Image URL</label>
+              <input id="f-cover" type="url" oninput="updateCoverPreview()">
+            </div>
+            <div class="full-width">
+              <label>Description</label>
+              <textarea id="f-desc" rows="2"></textarea>
+            </div>
+            <div class="full-width">
+              <label>Tags</label>
+              <div class="tags-input-wrap" id="tags-wrap">
+                <input id="tag-input" type="text" placeholder="Add tag…" autocomplete="off">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" id="btn-save-book">Save Book</button>
+            <button type="button" class="btn-outline" id="btn-cancel-book">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right bottom: reads list + form -->
+  <div id="panel-reads">
+    <div class="panel-box" id="reads-section">
+      <div class="panel-header">
+        <h2>Reading History</h2>
+        <button class="btn-primary btn-sm" id="btn-add-read">+ Log a Read</button>
+      </div>
+
+      <div id="reads-table-wrap">
+        <div id="reads-empty" class="empty-state" style="display:none;">
+          <p>No reads logged yet for this book.</p>
+        </div>
+        <table id="reads-table" style="display:none;">
+          <thead>
+            <tr>
+              <th>Started</th>
+              <th>Finished</th>
+              <th>Format</th>
+              <th>Rating</th>
+              <th>Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="reads-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Inline read form -->
+      <div id="read-form-wrap">
+        <h4 id="read-form-heading">Log a Read</h4>
+        <div class="read-form-grid">
+          <div>
+            <label>Started</label>
+            <input id="rf-started" type="date">
+          </div>
+          <div>
+            <label>Finished</label>
+            <input id="rf-finished" type="date">
+          </div>
+          <div>
+            <label>Format</label>
+            <select id="rf-format">
+              <option value="">—</option>
+              <option value="print">Print</option>
+              <option value="kindle">Kindle</option>
+              <option value="audiobook">Audiobook</option>
+              <option value="ebook">E-book</option>
+            </select>
+          </div>
+          <div>
+            <label>Rating</label>
+            <div class="star-picker" id="rf-stars">
+              <span data-v="1">★</span>
+              <span data-v="2">★</span>
+              <span data-v="3">★</span>
+              <span data-v="4">★</span>
+              <span data-v="5">★</span>
+            </div>
+          </div>
+          <div class="span2">
+            <label>Notes <small style="color:var(--muted)">(private)</small></label>
+            <input id="rf-notes" type="text">
+          </div>
+          <div class="span2">
+            <label>Review <small style="color:var(--muted)">(shown publicly)</small></label>
+            <textarea id="rf-review" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="read-form-actions">
+          <button class="btn-primary" id="btn-save-read">Save</button>
+          <button class="btn-outline" id="btn-cancel-read">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+const CFG = {
+  cognitoDomain: 'auth-165395066552.auth.us-east-1.amazoncognito.com',
+  clientId:      '71fv32ot0raceh7mt5lqgjvbto',
+  redirectUri:   'https://oldforest.net/apps/reading-log/',
+  apiBase:       'https://aijo86kijl.execute-api.us-east-1.amazonaws.com',
+};
+
+let accessToken = null;
+let userGroups  = [];
+
+// ── State ──────────────────────────────────────────────────────────────────
+let allBooks     = [];      // full list from API
+let filteredBooks = [];     // after search filter
+let selectedBook = null;    // currently selected book object
+let selectedReads = [];     // reads for selected book
+let editingReadId = null;   // readId being edited, or null for new
+
+// ── PKCE / Auth ─────────────────────────────────────────────────────────────
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function generatePKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+
+async function login() {
+  const { verifier, challenge } = await generatePKCE();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  const p = new URLSearchParams({
+    response_type: 'code', client_id: CFG.clientId,
+    redirect_uri: CFG.redirectUri,
+    scope: 'openid email profile aws.cognito.signin.user.admin',
+    code_challenge_method: 'S256', code_challenge: challenge,
+  });
+  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
+}
+
+function logout() {
+  accessToken = null;
+  sessionStorage.clear();
+  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
+  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
+}
+
+async function exchangeCode(code) {
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code', client_id: CFG.clientId,
+      redirect_uri: CFG.redirectUri, code, code_verifier: verifier,
+    }),
+  });
+  if (!res.ok) throw new Error('Token exchange failed');
+  return res.json();
+}
+
+function parseJWT(token) {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+  catch { return {}; }
+}
+
+function authHeader() {
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
+// ── API helpers ─────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(CFG.apiBase + path, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isErr ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ── Book list ─────────────────────────────────────────────────────────────────
+async function loadBooks() {
+  try {
+    const { books } = await api('GET', '/v1/reading/books');
+    allBooks = books;
+    renderTagFilterBar();
+    applyFilter();
+  } catch (e) {
+    document.getElementById('book-list').innerHTML = '<div class="empty-state"><p>Failed to load books.</p></div>';
+  }
+}
+
+let activeTagFilter = null;
+
+function renderTagFilterBar() {
+  const bar = document.getElementById('tag-filter-bar');
+  // Collect all unique tags across all books, sorted
+  const allTags = [...new Set(allBooks.flatMap(b => b.tags ?? []))].sort();
+  bar.innerHTML = allTags.map(tag =>
+    `<span class="tag-filter-pill${activeTagFilter === tag ? ' active' : ''}" onclick="toggleTagFilter('${esc(tag)}')">${esc(tag)}</span>`
+  ).join('');
+}
+
+function toggleTagFilter(tag) {
+  activeTagFilter = activeTagFilter === tag ? null : tag;
+  renderTagFilterBar();
+  applyFilter();
+}
+
+function applyFilter() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  filteredBooks = allBooks.filter(b => {
+    const matchesText = !q || b.title?.toLowerCase().includes(q) || b.author?.toLowerCase().includes(q);
+    const matchesTag  = !activeTagFilter || (b.tags ?? []).includes(activeTagFilter);
+    return matchesText && matchesTag;
+  });
+  renderBookList();
+}
+
+function renderBookList() {
+  const el = document.getElementById('book-list');
+  if (!filteredBooks.length) {
+    el.innerHTML = '<div class="empty-state"><p>No books found.</p></div>';
+    return;
+  }
+  el.innerHTML = filteredBooks.map(b => {
+    const active = selectedBook?.bookId === b.bookId ? ' active' : '';
+    const thumb = b.coverUrl
+      ? `<img class="book-thumb" src="${esc(b.coverUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      : '';
+    const ph = `<div class="book-thumb-placeholder" style="display:${b.coverUrl ? 'none' : 'flex'}">📖</div>`;
+    return `<div class="book-item${active}" data-id="${esc(b.bookId)}" onclick="selectBook('${esc(b.bookId)}')">
+      ${thumb}${ph}
+      <div class="book-item-info">
+        <div class="book-item-title">${esc(b.title)}</div>
+        <div class="book-item-author">${esc(b.author)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Book detail ───────────────────────────────────────────────────────────────
+async function selectBook(bookId) {
+  selectedBook = allBooks.find(b => b.bookId === bookId) ?? null;
+  if (!selectedBook) return;
+
+  renderBookList(); // update active state
+
+  // Fetch full book (with reads) from API
+  try {
+    const { book } = await api('GET', `/v1/reading/books/${encodeURIComponent(bookId)}`);
+    selectedBook = book;
+    selectedReads = book.reads ?? [];
+    showBookDetail(book, false);
+    showReadsSection();
+    renderReads();
+  } catch (e) {
+    toast('Failed to load book detail', true);
+  }
+}
+
+function showBookDetail(book, isNew) {
+  document.getElementById('no-book-selected').style.display = 'none';
+  document.getElementById('book-detail').classList.add('visible');
+  document.getElementById('detail-heading').textContent = isNew ? 'New Book' : book.title;
+  document.getElementById('btn-delete-book').style.display = isNew ? 'none' : '';
+
+  document.getElementById('f-title').value  = book.title   ?? '';
+  document.getElementById('f-author').value = book.author  ?? '';
+  document.getElementById('f-pages').value  = book.pageCount ?? '';
+  document.getElementById('f-isbn').value   = book.isbn    ?? '';
+  document.getElementById('f-gbid').value   = book.googleBooksId ?? '';
+  document.getElementById('f-grurl').value  = book.goodreadsUrl  ?? '';
+  document.getElementById('f-cover').value  = book.coverUrl ?? '';
+  document.getElementById('f-desc').value   = book.description ?? '';
+
+  updateCoverPreview();
+  renderTags(book.tags ?? []);
+  document.getElementById('gb-results').className = '';
+}
+
+function showNewBookForm() {
+  selectedBook = null;
+  selectedReads = [];
+  renderBookList();
+  showBookDetail({ title:'', author:'', tags:[] }, true);
+  document.getElementById('reads-section').classList.remove('visible');
+  document.getElementById('read-form-wrap').classList.remove('visible');
+}
+
+function updateCoverPreview() {
+  const url = document.getElementById('f-cover').value.trim();
+  const img = document.getElementById('book-cover-img');
+  const ph  = document.getElementById('book-cover-ph');
+  if (url) { img.src = url; img.style.display = ''; ph.style.display = 'none'; }
+  else     { img.style.display = 'none'; ph.style.display = ''; }
+}
+
+// ── Tags ──────────────────────────────────────────────────────────────────────
+let currentTags = [];
+
+function renderTags(tags) {
+  currentTags = [...tags];
+  const wrap = document.getElementById('tags-wrap');
+  const input = document.getElementById('tag-input');
+  // Remove old chips
+  wrap.querySelectorAll('.tag-chip').forEach(el => el.remove());
+  currentTags.forEach(tag => {
+    const chip = document.createElement('div');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `<span>${esc(tag)}</span><button type="button" onclick="removeTag('${esc(tag)}')" title="Remove">×</button>`;
+    wrap.insertBefore(chip, input);
+  });
+}
+
+function removeTag(tag) {
+  currentTags = currentTags.filter(t => t !== tag);
+  renderTags(currentTags);
+}
+
+document.getElementById('tag-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = e.target.value.trim().toLowerCase();
+    if (val && !currentTags.includes(val)) {
+      currentTags.push(val);
+      renderTags(currentTags);
+    }
+    e.target.value = '';
+  }
+  if (e.key === 'Backspace' && !e.target.value && currentTags.length) {
+    currentTags.pop();
+    renderTags(currentTags);
+  }
+});
+
+// ── Save book ─────────────────────────────────────────────────────────────────
+async function saveBook(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-save-book');
+  btn.disabled = true;
+
+  const payload = {
+    title:        document.getElementById('f-title').value.trim(),
+    author:       document.getElementById('f-author').value.trim(),
+    pageCount:    parseInt(document.getElementById('f-pages').value) || null,
+    isbn:         document.getElementById('f-isbn').value.trim() || null,
+    googleBooksId: document.getElementById('f-gbid').value.trim() || null,
+    goodreadsUrl:  document.getElementById('f-grurl').value.trim() || null,
+    coverUrl:     document.getElementById('f-cover').value.trim() || null,
+    description:  document.getElementById('f-desc').value.trim() || null,
+    tags:         currentTags,
+  };
+
+  try {
+    if (selectedBook?.bookId) {
+      const { book } = await api('PUT', `/v1/reading/books/${encodeURIComponent(selectedBook.bookId)}`, payload);
+      selectedBook = { ...selectedBook, ...book };
+      // Update local list
+      const idx = allBooks.findIndex(b => b.bookId === selectedBook.bookId);
+      if (idx >= 0) allBooks[idx] = { ...allBooks[idx], ...book };
+      toast('Book saved.');
+    } else {
+      const { book } = await api('POST', '/v1/reading/books', payload);
+      selectedBook = book;
+      allBooks.push(book);
+      allBooks.sort((a,b) => a.title.localeCompare(b.title));
+      showBookDetail(book, false);
+      showReadsSection();
+    }
+    renderTagFilterBar();
+    applyFilter();
+    document.getElementById('detail-heading').textContent = selectedBook.title;
+    document.getElementById('btn-delete-book').style.display = '';
+  } catch (err) {
+    toast('Failed to save book: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('btn-new-book').addEventListener('click', showNewBookForm);
+document.getElementById('btn-cancel-book').addEventListener('click', () => {
+  if (selectedBook?.bookId) selectBook(selectedBook.bookId);
+  else {
+    document.getElementById('book-detail').classList.remove('visible');
+    document.getElementById('no-book-selected').style.display = '';
+  }
+});
+
+document.getElementById('btn-delete-book').addEventListener('click', async () => {
+  if (!selectedBook?.bookId) return;
+  if (!confirm(`Delete "${selectedBook.title}" and all its reading history? This cannot be undone.`)) return;
+  try {
+    await api('DELETE', `/v1/reading/books/${encodeURIComponent(selectedBook.bookId)}`);
+    allBooks = allBooks.filter(b => b.bookId !== selectedBook.bookId);
+    selectedBook = null;
+    renderTagFilterBar();
+    applyFilter();
+    document.getElementById('book-detail').classList.remove('visible');
+    document.getElementById('no-book-selected').style.display = '';
+    document.getElementById('reads-section').classList.remove('visible');
+    toast('Book deleted.');
+  } catch (err) {
+    toast('Failed to delete: ' + err.message, true);
+  }
+});
+
+// ── Search filter ─────────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', applyFilter);
+
+// ── OpenLibrary book search ───────────────────────────────────────────────────
+document.getElementById('btn-gb-search').addEventListener('click', async () => {
+  const title  = document.getElementById('f-title').value.trim();
+  const author = document.getElementById('f-author').value.trim();
+  if (!title && !author) { toast('Enter a title or author to search', true); return; }
+
+  const params = new URLSearchParams({ limit: '8', fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,first_sentence' });
+  if (title)  params.set('title',  title);
+  if (author) params.set('author', author);
+
+  const gbResults = document.getElementById('gb-results');
+  gbResults.innerHTML = '<div style="color:var(--muted);padding:8px">Searching…</div>';
+  gbResults.classList.add('visible');
+
+  try {
+    const res  = await fetch(`https://openlibrary.org/search.json?${params}`);
+    const data = await res.json();
+    const items = data.docs ?? [];
+
+    if (!items.length) {
+      gbResults.innerHTML = '<div style="color:var(--muted);padding:8px">No results found.</div>';
+      return;
+    }
+    gbResults.innerHTML = items.map((doc, i) => {
+      const auth  = (doc.author_name ?? []).join(', ');
+      const thumb = doc.cover_i
+        ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
+        : '';
+      const imgHtml = thumb
+        ? `<img class="gb-thumb" src="${esc(thumb)}" alt="" loading="lazy">`
+        : `<div class="gb-thumb" style="background:var(--border)"></div>`;
+      return `<div class="gb-result" onclick="applyGBResult(${i})" data-i="${i}">
+        ${imgHtml}
+        <div class="gb-info">
+          <div class="gb-title">${esc(doc.title ?? '')}</div>
+          <div class="gb-author">${esc(auth)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    gbResults.dataset.results = JSON.stringify(items);
+  } catch (e) {
+    console.error('Book search error:', e);
+    gbResults.innerHTML = `<div style="color:var(--muted);padding:8px">Search failed: ${esc(e.message)}</div>`;
+  }
+});
+
+function applyGBResult(i) {
+  const items = JSON.parse(document.getElementById('gb-results').dataset.results ?? '[]');
+  const doc = items[i];
+  if (!doc) return;
+
+  // OpenLibrary cover (medium size, https)
+  const thumb = doc.cover_i
+    ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
+    : '';
+  // Prefer ISBN-13 (13-digit), fall back to any ISBN
+  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13)
+              ?? (doc.isbn ?? [])[0]
+              ?? '';
+  // OpenLibrary work key e.g. "/works/OL12345W" — strip the leading path
+  const olKey  = (doc.key ?? '').replace('/works/', '');
+  const desc   = typeof doc.first_sentence === 'object'
+    ? (doc.first_sentence?.value ?? '')
+    : (doc.first_sentence ?? '');
+
+  document.getElementById('f-title').value  = doc.title ?? '';
+  document.getElementById('f-author').value = (doc.author_name ?? []).join(', ');
+  document.getElementById('f-pages').value  = doc.number_of_pages_median ?? '';
+  document.getElementById('f-isbn').value   = isbn13;
+  document.getElementById('f-gbid').value   = olKey;   // reusing googleBooksId field for OL key
+  document.getElementById('f-cover').value  = thumb;
+  document.getElementById('f-desc').value   = desc.substring(0, 300);
+
+  updateCoverPreview();
+  document.getElementById('gb-results').classList.remove('visible');
+  toast('Book info applied from Google Books.');
+}
+
+// ── Reads ─────────────────────────────────────────────────────────────────────
+function showReadsSection() {
+  document.getElementById('reads-section').classList.add('visible');
+}
+
+function renderReads() {
+  const tbody = document.getElementById('reads-tbody');
+  const table = document.getElementById('reads-table');
+  const empty = document.getElementById('reads-empty');
+
+  if (!selectedReads.length) {
+    table.style.display = 'none';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  table.style.display = '';
+
+  tbody.innerHTML = selectedReads.map(r => {
+    const stars = r.rating ? '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating) : '—';
+    const starClass = r.rating ? 'star-display' : '';
+    const notesPeek = r.notes ? `<span title="${esc(r.notes)}">${esc(r.notes.substring(0,40))}${r.notes.length > 40 ? '…' : ''}</span>` : '—';
+    return `<tr>
+      <td>${r.started ?? '—'}</td>
+      <td>${r.finished ?? '—'}</td>
+      <td style="text-transform:capitalize">${r.format ?? '—'}</td>
+      <td><span class="${starClass}">${stars}</span></td>
+      <td>${notesPeek}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-sm btn-outline" onclick="editRead('${esc(r.readId)}')">Edit</button>
+        <button class="btn-sm btn-danger" style="margin-left:4px" onclick="deleteRead('${esc(r.readId)}')">Del</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// Star picker
+let currentRating = 0;
+document.getElementById('rf-stars').addEventListener('click', e => {
+  const star = e.target.closest('[data-v]');
+  if (!star) return;
+  currentRating = parseInt(star.dataset.v);
+  updateStars();
+});
+function updateStars() {
+  document.querySelectorAll('#rf-stars span').forEach(s => {
+    s.classList.toggle('on', parseInt(s.dataset.v) <= currentRating);
+  });
+}
+
+function openReadForm(isNew) {
+  document.getElementById('read-form-wrap').classList.add('visible');
+  document.getElementById('read-form-heading').textContent = isNew ? 'Log a Read' : 'Edit Read';
+  document.getElementById('btn-add-read').style.display = 'none';
+}
+
+function closeReadForm() {
+  document.getElementById('read-form-wrap').classList.remove('visible');
+  document.getElementById('btn-add-read').style.display = '';
+  editingReadId = null;
+  currentRating = 0;
+  updateStars();
+  ['rf-started','rf-finished','rf-notes','rf-review'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('rf-format').value = '';
+}
+
+document.getElementById('btn-add-read').addEventListener('click', () => {
+  editingReadId = null;
+  openReadForm(true);
+});
+
+document.getElementById('btn-cancel-read').addEventListener('click', closeReadForm);
+
+function editRead(readId) {
+  const r = selectedReads.find(r => r.readId === readId);
+  if (!r) return;
+  editingReadId = readId;
+  document.getElementById('rf-started').value  = r.started  ?? '';
+  document.getElementById('rf-finished').value = r.finished ?? '';
+  document.getElementById('rf-format').value   = r.format   ?? '';
+  document.getElementById('rf-notes').value    = r.notes    ?? '';
+  document.getElementById('rf-review').value   = r.review   ?? '';
+  currentRating = r.rating ?? 0;
+  updateStars();
+  openReadForm(false);
+}
+
+async function deleteRead(readId) {
+  if (!confirm('Delete this read entry?')) return;
+  try {
+    await api('DELETE', `/v1/reading/reads/${encodeURIComponent(readId)}`);
+    selectedReads = selectedReads.filter(r => r.readId !== readId);
+    renderReads();
+    toast('Read deleted.');
+  } catch (e) {
+    toast('Failed to delete: ' + e.message, true);
+  }
+}
+
+document.getElementById('btn-save-read').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-save-read');
+  btn.disabled = true;
+
+  const payload = {
+    bookId:   selectedBook.bookId,
+    started:  document.getElementById('rf-started').value.trim()  || null,
+    finished: document.getElementById('rf-finished').value.trim() || null,
+    format:   document.getElementById('rf-format').value          || null,
+    rating:   currentRating || null,
+    notes:    document.getElementById('rf-notes').value.trim()    || null,
+    review:   document.getElementById('rf-review').value.trim()   || null,
+  };
+
+  try {
+    if (editingReadId) {
+      const { read } = await api('PUT', `/v1/reading/reads/${encodeURIComponent(editingReadId)}`, payload);
+      const idx = selectedReads.findIndex(r => r.readId === editingReadId);
+      if (idx >= 0) selectedReads[idx] = read;
+      toast('Read updated.');
+    } else {
+      const { read } = await api('POST', '/v1/reading/reads', payload);
+      selectedReads.push(read);
+      selectedReads.sort((a,b) => (a.finished ?? a.started ?? '').localeCompare(b.finished ?? b.started ?? ''));
+      toast('Read logged.');
+    }
+    renderReads();
+    closeReadForm();
+  } catch (e) {
+    toast('Failed to save: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Util ─────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+
+  if (code) {
+    history.replaceState({}, '', window.location.pathname);
+    try {
+      const tokens = await exchangeCode(code);
+      accessToken = tokens.access_token;
+      sessionStorage.setItem('access_token', tokens.access_token);
+      if (tokens.id_token)      sessionStorage.setItem('id_token', tokens.id_token);
+      if (tokens.refresh_token) sessionStorage.setItem('refresh_token', tokens.refresh_token);
+    } catch (e) {
+      console.error('Login failed', e);
+    }
+  } else {
+    accessToken = sessionStorage.getItem('access_token');
+  }
+
+  if (accessToken) {
+    const claims = parseJWT(accessToken);
+    const raw = claims['cognito:groups'] ?? '';
+    userGroups = Array.isArray(raw) ? raw : raw.split(',').map(g => g.trim());
+  }
+
+  const btnAuth  = document.getElementById('btn-auth');
+  const userSpan = document.getElementById('user-email');
+
+  if (accessToken && userGroups.some(g => ['editors','admins'].includes(g))) {
+    const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
+    userSpan.textContent = idClaims.name || idClaims.email || '';
+    btnAuth.textContent = 'Sign out';
+    btnAuth.onclick = logout;
+
+    if (userGroups.includes('admins')) {
+      const a = document.createElement('a');
+      a.href = '/admin/index.html'; a.textContent = 'Admin'; a.className = 'nav-link';
+      document.getElementById('header-nav').appendChild(a);
+    }
+
+    document.getElementById('auth-wall').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    loadBooks();
+  } else {
+    btnAuth.textContent = 'Sign in';
+    btnAuth.onclick = login;
+    document.getElementById('auth-wall').style.display = '';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

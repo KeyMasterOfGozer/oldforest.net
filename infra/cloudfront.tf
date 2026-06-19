@@ -21,17 +21,31 @@ resource "aws_cloudfront_function" "www_redirect" {
   publish = true
   code    = <<-EOT
     function handler(event) {
-      var host = event.request.headers.host.value;
+      var request = event.request;
+      var host = request.headers.host.value;
+
+      // www → apex redirect
       if (host.startsWith('www.')) {
         return {
           statusCode: 301,
           statusDescription: 'Moved Permanently',
           headers: {
-            location: { value: 'https://' + host.slice(4) + event.request.uri }
+            location: { value: 'https://' + host.slice(4) + request.uri }
           }
         };
       }
-      return event.request;
+
+      // Rewrite directory-style URLs so S3 serves the index.html
+      // e.g. /apps/reading-log/ → /apps/reading-log/index.html
+      var uri = request.uri;
+      if (uri.endsWith('/')) {
+        request.uri = uri + 'index.html';
+      } else if (uri.lastIndexOf('.') <= uri.lastIndexOf('/')) {
+        // No file extension after the last slash — treat as directory
+        request.uri = uri + '/index.html';
+      }
+
+      return request;
     }
   EOT
 }

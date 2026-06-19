@@ -17,9 +17,11 @@ locals {
   ]
   dynamo_crud_actions = [
     "dynamodb:GetItem",
+    "dynamodb:BatchGetItem",
     "dynamodb:Scan",
     "dynamodb:Query",
     "dynamodb:PutItem",
+    "dynamodb:BatchWriteItem",
     "dynamodb:UpdateItem",
     "dynamodb:DeleteItem",
   ]
@@ -336,6 +338,33 @@ resource "aws_iam_role_policy" "rss_feed" {
       Effect   = "Allow"
       Action   = local.dynamo_read_actions
       Resource = [aws_dynamodb_table.posts.arn, "${aws_dynamodb_table.posts.arn}/index/*"]
+    }]
+  })
+}
+
+# ── reading-log ───────────────────────────────────────────────────────────────
+resource "aws_iam_role" "reading_log" {
+  name               = "oldforest-reading-log"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+resource "aws_iam_role_policy_attachment" "reading_log_logs" {
+  role       = aws_iam_role.reading_log.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+resource "aws_iam_role_policy" "reading_log" {
+  name = "dynamo-crud-books-reads"
+  role = aws_iam_role.reading_log.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = local.dynamo_crud_actions
+      Resource = [
+        aws_dynamodb_table.books.arn,
+        "${aws_dynamodb_table.books.arn}/index/*",
+        aws_dynamodb_table.reads.arn,
+        "${aws_dynamodb_table.reads.arn}/index/*",
+      ]
     }]
   })
 }

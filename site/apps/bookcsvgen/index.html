@@ -102,9 +102,9 @@
 
 <main>
   <h1>📊 Book Stats &amp; CSV</h1>
-  <p class="subtitle">Reading history from LibraryThing — yearly stats and downloadable CSV.</p>
+  <p class="subtitle">Reading history — yearly stats and downloadable CSV.</p>
 
-  <div id="loading">Loading books from LibraryThing…</div>
+  <div id="loading">Loading reading history…</div>
   <div id="error"   style="display:none"></div>
   <div id="content" style="display:none">
     <div class="sections">
@@ -153,18 +153,16 @@
 'use strict';
 
 const API_BASE = 'https://aijo86kijl.execute-api.us-east-1.amazonaws.com';
-const API      = '/v1/proxy/librarything';
+const API      = '/v1/reading/reads';
 
 let allReadings = [];
 let csvData     = '';
 
-function stampToDate(stamp) {
-  return (stamp && stamp > 0) ? new Date(stamp * 1000) : null;
-}
-
-function fmtDate(d) {
-  if (!d) return '—';
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+function parseDate(str) {
+  // str is ISO date string like "2025-03-15" or null/undefined
+  if (!str) return null;
+  const d = new Date(str + 'T12:00:00Z'); // noon UTC to avoid timezone shifting
+  return isNaN(d) ? null : d;
 }
 
 function esc(s) {
@@ -177,30 +175,31 @@ function csvCell(v) {
     ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function processBooks(books) {
+function processReads(reads) {
   const readings = [];
-  for (const key in books) {
-    const book  = books[key];
-    const dates = book.startfinishdates;
-    if (!dates || !dates.length) continue;
-    for (const d of dates) {
-      const start  = stampToDate(d.started_stamp);
-      const finish = stampToDate(d.finished_stamp);
-      const end    = finish ?? new Date();
-      const days   = start ? Math.round((end - start) / 86_400_000) : null;
-      readings.push({
-        title:       book.title  || '',
-        author:      book.author_fl || '',
-        startStr:    d.started_date  || '',
-        finishStr:   d.finished_date || '',
-        start,
-        finish,
-        days,
-        year:        (finish ?? end).getFullYear(),
-      });
-    }
+  for (const read of reads) {
+    const book   = read.book ?? {};
+    const start  = parseDate(read.started);
+    const finish = parseDate(read.finished);
+    const end    = finish ?? new Date();
+    const days   = start ? Math.round((end - start) / 86_400_000) : null;
+    readings.push({
+      title:     book.title  ?? '',
+      author:    book.author ?? '',
+      startStr:  read.started  ?? '',
+      finishStr: read.finished ?? '',
+      start,
+      finish,
+      days,
+      year:      (finish ?? end).getFullYear(),
+    });
   }
-  readings.sort((a, b) => (a.finish ?? new Date()) - (b.finish ?? new Date()));
+  // Already sorted by API, but ensure finish-date order
+  readings.sort((a, b) => {
+    const af = a.finishStr || a.startStr || '';
+    const bf = b.finishStr || b.startStr || '';
+    return af.localeCompare(bf);
+  });
   return readings;
 }
 
@@ -265,9 +264,9 @@ async function init() {
     const res = await fetch(`${API_BASE}${API}`);
     if (!res.ok) throw new Error(`API error ${res.status}`);
     const data = await res.json();
-    if (!data.books) throw new Error('No book data returned');
+    if (!data.reads) throw new Error('No reading data returned');
 
-    allReadings = processBooks(data.books);
+    allReadings = processReads(data.reads);
     csvData     = buildCsv(allReadings);
     const stats = buildStats(allReadings);
 
