@@ -117,6 +117,8 @@
               <th>Year</th>
               <th class="num">Books</th>
               <th class="num">Avg days</th>
+              <th class="num">Total pages</th>
+              <th class="num">Avg pages</th>
             </tr>
           </thead>
           <tbody id="stats-tbody"></tbody>
@@ -191,6 +193,7 @@ function processReads(reads) {
       start,
       finish,
       days,
+      pages:     book.pageCount ?? null,
       year:      (finish ?? end).getFullYear(),
     });
   }
@@ -206,12 +209,19 @@ function processReads(reads) {
 function buildStats(readings) {
   const map = {};
   for (const r of readings) {
-    if (!map[r.year]) map[r.year] = { count: 0, total: 0 };
+    if (!map[r.year]) map[r.year] = { count: 0, totalDays: 0, totalPages: 0, pagesCount: 0 };
     map[r.year].count++;
-    map[r.year].total += r.days ?? 0;
+    map[r.year].totalDays += r.days ?? 0;
+    if (r.pages) { map[r.year].totalPages += r.pages; map[r.year].pagesCount++; }
   }
   return Object.entries(map)
-    .map(([yr, s]) => ({ year: +yr, count: s.count, avg: (s.total / s.count).toFixed(1) }))
+    .map(([yr, s]) => ({
+      year:     +yr,
+      count:    s.count,
+      avg:      (s.totalDays / s.count).toFixed(1),
+      totPages: s.totalPages || null,
+      avgPages: s.pagesCount ? Math.round(s.totalPages / s.pagesCount) : null,
+    }))
     .sort((a, b) => a.year - b.year);
 }
 
@@ -246,6 +256,8 @@ function renderStats(stats) {
       <td class="yr">${s.year}</td>
       <td class="num">${s.count}</td>
       <td class="num">${s.avg}</td>
+      <td class="num">${s.totPages?.toLocaleString() ?? '—'}</td>
+      <td class="num">${s.avgPages?.toLocaleString() ?? '—'}</td>
     </tr>`).join('');
 }
 
