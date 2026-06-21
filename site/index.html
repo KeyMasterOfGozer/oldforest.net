@@ -36,6 +36,10 @@
     #user-email { color: var(--muted); font-size: 13px; }
     .nav-link { font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
     .nav-link:hover { color: var(--accent); }
+    .rss-link { display: inline-flex; align-items: center; gap: 5px; font-family: -apple-system, sans-serif;
+                font-size: 12px; font-weight: 600; color: #fff; background: #f26522;
+                border-radius: 4px; padding: 3px 7px; text-decoration: none; transition: opacity .15s; }
+    .rss-link:hover { opacity: .85; color: #fff; text-decoration: none; }
 
     /* ── Buttons ── */
     button { cursor: pointer; font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 500; border: none; border-radius: var(--radius); padding: 7px 16px; transition: opacity .15s; }
@@ -46,9 +50,32 @@
     /* ── Main layout ── */
     main { max-width: 780px; margin: 0 auto; padding: 48px 24px; }
 
-    .page-intro { margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 32px; }
+    .page-intro { margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 32px;
+                  display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .page-intro-text { min-width: 0; }
     .page-intro h1 { font-size: 32px; color: var(--accent); margin-bottom: 8px; }
     .page-intro p  { color: var(--muted); font-size: 16px; }
+    @media (max-width: 560px) { .page-intro { flex-direction: column; align-items: flex-start; } }
+
+    /* ── Currently Reading ── */
+    #currently-reading { display: none; flex-shrink: 0; }
+    .cr-label { font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 600;
+                text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 10px; }
+    .cr-books { display: flex; flex-wrap: wrap; gap: 12px; }
+    .cr-book { display: flex; align-items: center; gap: 10px; background: var(--surface);
+               border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px;
+               text-decoration: none; transition: border-color .15s; max-width: 320px; }
+    .cr-book:hover { border-color: var(--accent); text-decoration: none; }
+    .cr-cover { width: 36px; height: 52px; object-fit: cover; border-radius: 3px; flex-shrink: 0;
+                background: var(--border); }
+    .cr-cover-placeholder { width: 36px; height: 52px; border-radius: 3px; flex-shrink: 0;
+                            background: var(--border); display: flex; align-items: center;
+                            justify-content: center; font-size: 18px; }
+    .cr-info { min-width: 0; }
+    .cr-title  { font-family: Georgia, serif; font-size: 14px; color: var(--text);
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cr-author { font-family: -apple-system, sans-serif; font-size: 12px; color: var(--muted);
+                 margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* ── Post list ── */
     #posts-list { display: flex; flex-direction: column; gap: 32px; }
@@ -105,6 +132,14 @@
     <div class="header-right">
       <div id="header-nav">
         <a href="/apps.html" class="nav-link">Apps</a>
+        <a href="/v1/feed.xml" class="rss-link" title="RSS Feed">
+          <svg width="11" height="11" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
+            <circle cx="1" cy="7" r="1"/>
+            <path d="M0 4q4 0 4 4h1.5Q5.5 2.5 0 2.5z"/>
+            <path d="M0 1Q7 1 7 8h1.5Q8.5-.5 0-.5z"/>
+          </svg>
+          RSS
+        </a>
       </div>
       <div class="header-auth">
         <span id="user-email"></span>
@@ -116,9 +151,16 @@
 
 <main>
   <div class="page-intro">
-    <h1>Old Forest</h1>
-    <p>Stories and reflections from the digital forest.</p>
+    <div class="page-intro-text">
+      <h1>Old Forest</h1>
+      <p>Stories and reflections from the digital forest.</p>
+    </div>
+    <div id="currently-reading">
+      <div class="cr-label">📖 Currently Reading</div>
+      <div class="cr-books" id="cr-books"></div>
+    </div>
   </div>
+
   <div id="tag-cloud">
     <div id="tag-cloud-header">
       <div id="tag-cloud-label">Filter by tag</div>
@@ -396,6 +438,36 @@ function renderPosts(posts) {
   }).join('');
 }
 
+// ── CURRENTLY READING ─────────────────────────
+async function loadCurrentlyReading() {
+  try {
+    const res = await fetch(`${CFG.apiBase}/v1/reading/books`);
+    if (!res.ok) return;
+    const { books } = await res.json();
+    const current = (books ?? []).filter(b => (b.tags ?? []).some(t => t.toLowerCase() === 'current'));
+    if (!current.length) return;
+
+    const container = document.getElementById('cr-books');
+    container.innerHTML = current.map(b => {
+      const cover = b.coverUrl
+        ? `<img class="cr-cover" src="${esc(b.coverUrl)}" alt="" loading="lazy">`
+        : `<div class="cr-cover-placeholder">📕</div>`;
+      return `
+        <a class="cr-book" href="/apps/reading-log/" title="${esc(b.title)}">
+          ${cover}
+          <div class="cr-info">
+            <div class="cr-title">${esc(b.title)}</div>
+            <div class="cr-author">${esc(b.author)}</div>
+          </div>
+        </a>`;
+    }).join('');
+
+    document.getElementById('currently-reading').style.display = 'block';
+  } catch (e) {
+    // Silently ignore — this is optional UI
+  }
+}
+
 // ── INIT ──────────────────────────────────────
 async function init() {
   const params = new URLSearchParams(window.location.search);
@@ -463,7 +535,7 @@ async function init() {
     btnAuth.onclick = login;
   }
 
-  await loadPosts();
+  await Promise.all([loadPosts(), loadCurrentlyReading()]);
 }
 
 init();
