@@ -27,18 +27,15 @@
     a:hover { color: var(--accent2); text-decoration: underline; }
 
     /* ── Header ── */
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
-    .header-inner { max-width: 780px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
-    .site-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; }
-    .header-right { display: flex; align-items: center; gap: 20px; font-family: -apple-system, sans-serif; }
-    #header-nav   { display: flex; align-items: center; gap: 14px; }
-    .header-auth  { display: flex; align-items: center; gap: 10px; }
-    #user-email { color: var(--muted); font-size: 13px; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; position: sticky; top: 0; z-index: 100; }
+    .header-inner { display: flex; align-items: center; height: 56px; }
+    .site-title { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; font-family: Georgia, serif; white-space: nowrap; text-decoration: none; margin-right: 20px; }
+    .header-nav { display: flex; align-items: center; gap: 14px; flex: 1; }
+    .header-auth { display: flex; align-items: center; gap: 10px; font-family: -apple-system, sans-serif; white-space: nowrap; }
+    #user-email, #user-name { color: var(--muted); font-size: 13px; }
     .nav-link { font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
     .nav-link:hover { color: var(--accent); }
-    .rss-link { display: inline-flex; align-items: center; gap: 5px; font-family: -apple-system, sans-serif;
-                font-size: 12px; font-weight: 600; color: #fff; background: #f26522;
-                border-radius: 4px; padding: 3px 7px; text-decoration: none; transition: opacity .15s; }
+    .rss-link { display: inline-flex; align-items: center; gap: 5px; font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 600; color: #fff; background: #f26522; border-radius: 4px; padding: 3px 7px; text-decoration: none; transition: opacity .15s; white-space: nowrap; }
     .rss-link:hover { opacity: .85; color: #fff; text-decoration: none; }
 
     /* ── Buttons ── */
@@ -62,20 +59,42 @@
     .cr-label { font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 600;
                 text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 10px; }
     .cr-books { display: flex; flex-wrap: wrap; gap: 12px; }
-    .cr-book { display: flex; align-items: center; gap: 10px; background: var(--surface);
-               border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px;
-               text-decoration: none; transition: border-color .15s; max-width: 320px; }
-    .cr-book:hover { border-color: var(--accent); text-decoration: none; }
+
+    /* Card — single cover grows, extra detail slides in below */
+    .cr-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+               overflow: hidden; transition: border-color .2s; width: 200px; cursor: default; }
+    .cr-wrap:hover { border-color: var(--accent); }
+
+    /* Header row: cover + text side by side */
+    .cr-head { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; }
     .cr-cover { width: 36px; height: 52px; object-fit: cover; border-radius: 3px; flex-shrink: 0;
-                background: var(--border); }
+                background: var(--border); transition: width .25s ease, height .25s ease; }
+    .cr-wrap:hover .cr-cover { width: 60px; height: 88px; }
     .cr-cover-placeholder { width: 36px; height: 52px; border-radius: 3px; flex-shrink: 0;
                             background: var(--border); display: flex; align-items: center;
-                            justify-content: center; font-size: 18px; }
-    .cr-info { min-width: 0; }
-    .cr-title  { font-family: Georgia, serif; font-size: 14px; color: var(--text);
-                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cr-author { font-family: -apple-system, sans-serif; font-size: 12px; color: var(--muted);
-                 margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                            justify-content: center; font-size: 18px;
+                            transition: width .25s ease, height .25s ease, font-size .25s ease; }
+    .cr-wrap:hover .cr-cover-placeholder { width: 60px; height: 88px; font-size: 26px; }
+    .cr-info { min-width: 0; padding-top: 2px; }
+    .cr-title  { font-family: Georgia, serif; font-size: 13px; color: var(--text); line-height: 1.3; }
+    .cr-author { font-family: -apple-system, sans-serif; font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .cr-pages  { font-family: -apple-system, sans-serif; font-size: 11px; color: var(--muted);
+                 margin-top: 3px; max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+    .cr-wrap:hover .cr-pages { max-height: 20px; }
+
+    /* Extra detail slides in below */
+    .cr-expand { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+    .cr-wrap:hover .cr-expand { max-height: 300px; }
+    .cr-expand-inner { padding: 8px 10px 10px; border-top: 1px solid var(--border);
+                       font-family: -apple-system, sans-serif; }
+    .cr-desc { font-size: 11px; color: var(--muted); line-height: 1.5; margin-bottom: 8px;
+               display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .cr-links { display: flex; flex-direction: column; gap: 5px; }
+    .cr-link { font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 4px;
+               text-decoration: none; transition: opacity .15s; text-align: center; display: block; }
+    .cr-link:hover { opacity: .8; text-decoration: none; }
+    .cr-link-gb { background: #4285f4; color: #fff; }
+    .cr-link-gr { background: #f4f1ea; color: #372213; }
 
     /* ── Post list ── */
     #posts-list { display: flex; flex-direction: column; gap: 32px; }
@@ -129,22 +148,13 @@
 <header>
   <div class="header-inner">
     <a class="site-title" href="/">🌳 Old Forest</a>
-    <div class="header-right">
-      <div id="header-nav">
-        <a href="/apps.html" class="nav-link">Apps</a>
-        <a href="/v1/feed.xml" class="rss-link" title="RSS Feed">
-          <svg width="11" height="11" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
-            <circle cx="1" cy="7" r="1"/>
-            <path d="M0 4q4 0 4 4h1.5Q5.5 2.5 0 2.5z"/>
-            <path d="M0 1Q7 1 7 8h1.5Q8.5-.5 0-.5z"/>
-          </svg>
-          RSS
-        </a>
-      </div>
-      <div class="header-auth">
-        <span id="user-email"></span>
-        <button class="btn-outline" id="btn-auth">Sign in</button>
-      </div>
+    <nav class="header-nav" id="header-nav">
+      <a href="/v1/feed.xml" class="rss-link" title="RSS Feed"><svg width="11" height="11" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><circle cx="1" cy="7" r="1"/><path d="M0 4q4 0 4 4h1.5Q5.5 2.5 0 2.5z"/><path d="M0 1Q7 1 7 8h1.5Q8.5-.5 0-.5z"/></svg> RSS</a>
+      <a href="/apps.html" class="nav-link">Apps</a>
+    </nav>
+    <div class="header-auth">
+      <span id="user-email"></span>
+      <button class="btn-outline" id="btn-auth">Sign in</button>
     </div>
   </div>
 </header>
@@ -452,14 +462,42 @@ async function loadCurrentlyReading() {
       const cover = b.coverUrl
         ? `<img class="cr-cover" src="${esc(b.coverUrl)}" alt="" loading="lazy">`
         : `<div class="cr-cover-placeholder">📕</div>`;
+
+      // googleBooksId may hold an OpenLibrary key (OL...) if the book was added
+      // via the reading log search (which switched from Google Books to OpenLibrary)
+      const isOL  = b.googleBooksId?.startsWith('OL');
+      const gbUrl = b.googleBooksId
+        ? (isOL
+            ? `https://openlibrary.org/works/${encodeURIComponent(b.googleBooksId)}`
+            : `https://books.google.com/books?id=${encodeURIComponent(b.googleBooksId)}`)
+        : `https://books.google.com/books?q=${encodeURIComponent(b.title + ' ' + b.author)}`;
+      const gbLabel = (b.googleBooksId && isOL) ? 'Open Library' : 'Google Books';
+      const grUrl = b.goodreadsUrl
+        || `https://www.goodreads.com/search?q=${encodeURIComponent(b.isbn || b.title + ' ' + b.author)}`;
+
+      const pages = b.pageCount ? `<div class="cr-pages">${b.pageCount} pages</div>` : '';
+      const desc  = b.description ? `<div class="cr-desc">${esc(b.description)}</div>` : '';
+
       return `
-        <a class="cr-book" href="/apps/reading-log/" title="${esc(b.title)}">
-          ${cover}
-          <div class="cr-info">
-            <div class="cr-title">${esc(b.title)}</div>
-            <div class="cr-author">${esc(b.author)}</div>
+        <div class="cr-wrap">
+          <div class="cr-head">
+            ${cover}
+            <div class="cr-info">
+              <div class="cr-title">${esc(b.title)}</div>
+              <div class="cr-author">${esc(b.author)}</div>
+              ${pages}
+            </div>
           </div>
-        </a>`;
+          <div class="cr-expand">
+            <div class="cr-expand-inner">
+              ${desc}
+              <div class="cr-links">
+                <a class="cr-link cr-link-gb" href="${gbUrl}" target="_blank" rel="noopener">${gbLabel}</a>
+                <a class="cr-link cr-link-gr" href="${grUrl}" target="_blank" rel="noopener">Goodreads</a>
+              </div>
+            </div>
+          </div>
+        </div>`;
     }).join('');
 
     document.getElementById('currently-reading').style.display = 'block';

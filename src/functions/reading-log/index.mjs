@@ -75,10 +75,12 @@ async function getBook(event) {
 
   const [bookResult, readsResult] = await Promise.all([
     dynamo.send(new GetCommand({ TableName: BOOKS_TABLE, Key: { bookId } })),
-    dynamo.send(new QueryCommand({
+    // Scan with filter instead of querying the byBook GSI — the GSI uses
+    // 'finished' as its sort key, so reads without a finish date are excluded
+    // from the index. A scan catches all reads for this book regardless.
+    dynamo.send(new ScanCommand({
       TableName: READS_TABLE,
-      IndexName: 'byBook',
-      KeyConditionExpression: 'bookId = :bid',
+      FilterExpression: 'bookId = :bid',
       ExpressionAttributeValues: { ':bid': bookId },
     })),
   ]);

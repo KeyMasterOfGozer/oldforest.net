@@ -25,15 +25,16 @@
     a:hover { color: var(--accent2); text-decoration: underline; }
 
     /* ── Header ── */
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
-    .header-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
-    .site-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; font-family: Georgia, serif; }
-    .header-right { display: flex; align-items: center; gap: 20px; font-family: -apple-system, sans-serif; }
-    #header-nav   { display: flex; align-items: center; gap: 14px; }
-    .header-auth  { display: flex; align-items: center; gap: 10px; }
-    #user-email { color: var(--muted); font-size: 13px; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; position: sticky; top: 0; z-index: 100; }
+    .header-inner { display: flex; align-items: center; height: 56px; }
+    .site-title { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; font-family: Georgia, serif; white-space: nowrap; text-decoration: none; margin-right: 20px; }
+    .header-nav { display: flex; align-items: center; gap: 14px; flex: 1; }
+    .header-auth { display: flex; align-items: center; gap: 10px; font-family: -apple-system, sans-serif; white-space: nowrap; }
+    #user-email, #user-name { color: var(--muted); font-size: 13px; }
     .nav-link { font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
     .nav-link:hover { color: var(--accent); }
+    .rss-link { display: inline-flex; align-items: center; gap: 5px; font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 600; color: #fff; background: #f26522; border-radius: 4px; padding: 3px 7px; text-decoration: none; transition: opacity .15s; white-space: nowrap; }
+    .rss-link:hover { opacity: .85; color: #fff; text-decoration: none; }
 
     /* ── Buttons ── */
     button { cursor: pointer; font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 500; border: none; border-radius: var(--radius); padding: 7px 16px; transition: opacity .15s; }
@@ -113,14 +114,13 @@
 <header>
   <div class="header-inner">
     <a class="site-title" href="/">🌳 Old Forest</a>
-    <div class="header-right">
-      <div id="header-nav">
-        <a href="/" class="nav-link">Blog</a>
-      </div>
-      <div class="header-auth">
-        <span id="user-email"></span>
-        <button class="btn-outline" id="btn-auth">Sign in</button>
-      </div>
+    <nav class="header-nav" id="header-nav">
+      <a href="/v1/feed.xml" class="rss-link" title="RSS Feed"><svg width="11" height="11" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><circle cx="1" cy="7" r="1"/><path d="M0 4q4 0 4 4h1.5Q5.5 2.5 0 2.5z"/><path d="M0 1Q7 1 7 8h1.5Q8.5-.5 0-.5z"/></svg> RSS</a>
+      <a href="/" class="nav-link">Blog</a>
+    </nav>
+    <div class="header-auth">
+      <span id="user-email"></span>
+      <button class="btn-outline" id="btn-auth">Sign in</button>
     </div>
   </div>
 </header>

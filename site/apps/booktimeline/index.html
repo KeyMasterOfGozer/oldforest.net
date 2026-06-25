@@ -29,14 +29,16 @@
            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
 
     /* ── Header ── */
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; }
-    .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center;
-                    justify-content: space-between; height: 56px; }
-    .site-title { font-size: 18px; font-weight: 700; color: var(--accent);
-                  text-decoration: none; font-family: Georgia, serif; }
-    .header-links { display: flex; gap: 16px; font-size: 13px; }
-    .header-links a { color: var(--muted); text-decoration: none; }
-    .header-links a:hover { color: var(--accent); }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; position: sticky; top: 0; z-index: 100; }
+    .header-inner { display: flex; align-items: center; height: 56px; }
+    .site-title { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; font-family: Georgia, serif; white-space: nowrap; text-decoration: none; margin-right: 20px; }
+    .header-nav { display: flex; align-items: center; gap: 14px; flex: 1; }
+    .header-auth { display: flex; align-items: center; gap: 10px; font-family: -apple-system, sans-serif; white-space: nowrap; }
+    #user-email, #user-name { color: var(--muted); font-size: 13px; }
+    .nav-link { font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
+    .nav-link:hover { color: var(--accent); }
+    .rss-link { display: inline-flex; align-items: center; gap: 5px; font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 600; color: #fff; background: #f26522; border-radius: 4px; padding: 3px 7px; text-decoration: none; transition: opacity .15s; white-space: nowrap; }
+    .rss-link:hover { opacity: .85; color: #fff; text-decoration: none; }
 
     /* ── Main ── */
     main { max-width: 1200px; margin: 0 auto; padding: 28px 24px 40px; }
@@ -129,10 +131,11 @@
 <header>
   <div class="header-inner">
     <a class="site-title" href="/">🌳 Old Forest</a>
-    <div class="header-links">
-      <a href="/">Blog</a>
-      <a href="/apps.html">← Apps</a>
-    </div>
+    <nav class="header-nav">
+      <a href="/v1/feed.xml" class="rss-link" title="RSS Feed"><svg width="11" height="11" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><circle cx="1" cy="7" r="1"/><path d="M0 4q4 0 4 4h1.5Q5.5 2.5 0 2.5z"/><path d="M0 1Q7 1 7 8h1.5Q8.5-.5 0-.5z"/></svg> RSS</a>
+      <a href="/" class="nav-link">Blog</a>
+      <a href="/apps.html" class="nav-link">Apps</a>
+    </nav>
   </div>
 </header>
 

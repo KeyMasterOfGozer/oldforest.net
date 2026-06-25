@@ -25,12 +25,16 @@
     body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; min-height: 100vh; }
 
     /* ── Header ── */
-    header { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
-    .header-left { display: flex; align-items: center; gap: 18px; }
-    header h1 { font-size: 17px; font-weight: 600; color: var(--accent); }
-    .nav-link { font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; position: sticky; top: 0; z-index: 100; }
+    .header-inner { display: flex; align-items: center; height: 56px; }
+    .site-title { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; font-family: Georgia, serif; white-space: nowrap; text-decoration: none; margin-right: 20px; }
+    .header-nav { display: flex; align-items: center; gap: 14px; flex: 1; }
+    .header-auth { display: flex; align-items: center; gap: 10px; font-family: -apple-system, sans-serif; white-space: nowrap; }
+    #user-email, #user-name { color: var(--muted); font-size: 13px; }
+    .nav-link { font-family: -apple-system, sans-serif; font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
     .nav-link:hover { color: var(--accent); }
-    .header-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); }
+    .rss-link { display: inline-flex; align-items: center; gap: 5px; font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 600; color: #fff; background: #f26522; border-radius: 4px; padding: 3px 7px; text-decoration: none; transition: opacity .15s; white-space: nowrap; }
+    .rss-link:hover { opacity: .85; color: #fff; text-decoration: none; }
 
     /* ── Buttons ── */
     button { cursor: pointer; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 500; padding: 7px 16px; transition: opacity .15s; }
@@ -172,15 +176,18 @@
 <body>
 
 <header>
-  <div class="header-left">
-    <h1>🌳 Old Forest Admin</h1>
-    <a class="nav-link" href="/">Blog</a>
-    <a class="nav-link" href="/editor/index.html">Editor</a>
-    <a class="nav-link" href="/apps.html">Apps</a>
-  </div>
-  <div class="header-right">
-    <span id="user-name"></span>
-    <button class="btn-secondary" id="btn-logout">Sign out</button>
+  <div class="header-inner">
+    <a class="site-title" href="/">🌳 Old Forest</a>
+    <nav class="header-nav">
+      <a href="/v1/feed.xml" class="rss-link" title="RSS Feed"><svg width="11" height="11" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><circle cx="1" cy="7" r="1"/><path d="M0 4q4 0 4 4h1.5Q5.5 2.5 0 2.5z"/><path d="M0 1Q7 1 7 8h1.5Q8.5-.5 0-.5z"/></svg> RSS</a>
+      <a href="/" class="nav-link">Blog</a>
+      <a href="/editor/index.html" class="nav-link">Editor</a>
+      <a href="/apps.html" class="nav-link">Apps</a>
+    </nav>
+    <div class="header-auth">
+      <span id="user-name"></span>
+      <button class="btn-outline" id="btn-logout">Sign out</button>
+    </div>
   </div>
 </header>
 
