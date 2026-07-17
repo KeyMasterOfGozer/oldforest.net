@@ -67,6 +67,8 @@
     .tag-filter-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: pointer; color: var(--muted); transition: background .1s, color .1s; }
     .tag-filter-pill:hover { border-color: var(--accent); color: var(--text); }
     .tag-filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .tag-expand-btn { background: var(--surface2); border: 1px dashed var(--border); border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: pointer; color: var(--muted); font-style: italic; }
+    .tag-expand-btn:hover { border-color: var(--accent); color: var(--text); }
 
     #book-list { max-height: calc(100vh - 280px); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
     .book-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background .1s; }
@@ -77,6 +79,7 @@
     .book-item-info { min-width: 0; }
     .book-item-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
     .book-item-author { color: var(--muted); font-size: 12px; }
+    .book-item-series { color: var(--muted); font-size: 11px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* ── Right panel: book detail + reads ── */
     #panel-detail { grid-column: 2; grid-row: 1; }
@@ -114,15 +117,33 @@
 
     .form-actions { display: flex; gap: 10px; margin-top: 14px; }
 
-    /* ── Google Books search results ── */
-    #gb-results { margin-top: 10px; display: none; flex-direction: column; gap: 4px; }
+    /* ── Book search (multi-source) ── */
+    .search-source-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+    .search-tab { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+                  color: var(--muted); font-size: 12px; font-weight: 600; padding: 4px 12px; cursor: pointer; transition: background .1s, color .1s, border-color .1s; }
+    .search-tab:hover { border-color: var(--accent); color: var(--text); }
+    .search-tab.active { background: var(--accent); border-color: var(--accent); color: #0d1a0b; }
+    #gb-results { margin-top: 4px; display: none; flex-direction: column; gap: 4px; }
     #gb-results.visible { display: flex; }
     .gb-result { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: border-color .1s; }
     .gb-result:hover { border-color: var(--accent); }
     .gb-thumb { width: 28px; height: 40px; object-fit: cover; border-radius: 2px; background: var(--border); flex-shrink: 0; }
-    .gb-info { min-width: 0; }
+    .gb-info { min-width: 0; flex: 1; }
     .gb-title { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .gb-author { font-size: 12px; color: var(--muted); }
+    .gb-source-badge { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px; flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
+    .badge-ol { background: #1a3460; color: #aaccff; border: 1px solid #5588cc; }
+    .badge-gb { background: #1a3828; color: #88ddaa; border: 1px solid #44aa66; }
+    /* ── External link badges ── */
+    .book-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .book-link-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+                       padding: 3px 8px; border-radius: 4px; text-decoration: none; transition: opacity .15s; }
+    .book-link-badge:hover { opacity: .8; text-decoration: none; }
+    .badge-amz  { background: #ff9900; color: #111; }
+    .badge-gr   { background: #553b08; color: #e8d8b0; border: 1px solid #8b6914; }
+    .badge-ol2  { background: #1a3460; color: #aaccff; border: 1px solid #5588cc; }
+    .badge-rr   { background: #3a1060; color: #d0aaff; border: 1px solid #8855cc; }
+    .badge-gb2  { background: #1a3828; color: #88ddaa; border: 1px solid #44aa66; }
 
     /* ── Reads section ── */
     #reads-section { display: none; }
@@ -209,13 +230,19 @@
         <div class="panel-header">
           <h2 id="detail-heading">New Book</h2>
           <div style="display:flex;gap:8px;">
-            <button class="btn-sm btn-outline" id="btn-gb-search">Search Books</button>
             <button class="btn-danger btn-sm" id="btn-delete-book" style="display:none">Delete Book</button>
           </div>
         </div>
 
-        <!-- Google Books results -->
-        <div id="gb-results"></div>
+        <!-- Multi-source search -->
+        <div id="book-search-area" style="margin-bottom:12px;">
+          <div class="search-source-tabs">
+            <button class="search-tab active" data-source="ol">OpenLibrary</button>
+            <button class="search-tab" data-source="gb">Google Books</button>
+            <button class="btn-primary btn-sm" id="btn-gb-search" style="margin-left:auto;">Search</button>
+          </div>
+          <div id="gb-results"></div>
+        </div>
 
         <!-- Book form -->
         <form id="book-form" onsubmit="saveBook(event)">
@@ -241,21 +268,45 @@
                 <label>ISBN</label>
                 <input id="f-isbn" type="text">
               </div>
+              <div>
+                <label>Series</label>
+                <input id="f-series" type="text" placeholder="e.g. Dresden Files">
+              </div>
+              <div>
+                <label>Series # <small style="color:var(--muted)">(e.g. 8 or 12.5)</small></label>
+                <input id="f-seriesidx" type="number" min="0" step="0.5" placeholder="1">
+              </div>
             </div>
           </div>
 
           <div class="form-grid">
             <div>
+              <label>OpenLibrary ID <small style="color:var(--muted)">(e.g. OL45246981W)</small></label>
+              <input id="f-olid" type="text" placeholder="OL…W">
+            </div>
+            <div>
               <label>Google Books ID</label>
               <input id="f-gbid" type="text">
+            </div>
+            <div>
+              <label>Amazon ASIN <small style="color:var(--muted)">(10 chars)</small></label>
+              <input id="f-amzid" type="text" placeholder="B0…">
+            </div>
+            <div>
+              <label>RoyalRoad ID <small style="color:var(--muted)">(e.g. 132107)</small></label>
+              <input id="f-rrid" type="text" placeholder="123456">
             </div>
             <div>
               <label>GoodReads URL</label>
               <input id="f-grurl" type="url" placeholder="https://www.goodreads.com/book/show/…">
             </div>
-            <div class="full-width">
+            <div>
               <label>Cover Image URL</label>
               <input id="f-cover" type="url" oninput="updateCoverPreview()">
+            </div>
+            <div class="full-width" id="book-links-row" style="display:none;">
+              <label>Links</label>
+              <div class="book-links" id="book-links"></div>
             </div>
             <div class="full-width">
               <label>Description</label>
@@ -430,8 +481,44 @@ function authHeader() {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 }
 
+function tokenExpiresInMs() {
+  if (!accessToken) return 0;
+  const claims = parseJWT(accessToken);
+  return claims.exp ? (claims.exp * 1000) - Date.now() : 0;
+}
+
+async function maybeRefreshToken() {
+  if (tokenExpiresInMs() > 60_000) return; // still good for >1 min
+  const refresh = sessionStorage.getItem('refresh_token');
+  if (!refresh) return;
+  try {
+    const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id:  CFG.clientId,
+        refresh_token: refresh,
+      }),
+    });
+    if (!res.ok) throw new Error('refresh failed');
+    const tokens = await res.json();
+    accessToken = tokens.access_token;
+    sessionStorage.setItem('access_token', tokens.access_token);
+    if (tokens.id_token) sessionStorage.setItem('id_token', tokens.id_token);
+  } catch {
+    // Refresh failed — clear session and force re-login on next write
+    accessToken = null;
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('refresh_token');
+  }
+}
+
 // ── API helpers ─────────────────────────────────────────────────────────────
 async function api(method, path, body) {
+  // Proactively refresh the token if it's close to expiry
+  await maybeRefreshToken();
+
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json', ...authHeader() },
@@ -468,14 +555,63 @@ async function loadBooks() {
 }
 
 let activeTagFilter = null;
+let tagBarExpanded  = false;
+
+// Tags always shown in the first two rows regardless of frequency
+const PINNED_TAGS = ['to read', 'current'];
 
 function renderTagFilterBar() {
   const bar = document.getElementById('tag-filter-bar');
-  // Collect all unique tags across all books, sorted
-  const allTags = [...new Set(allBooks.flatMap(b => b.tags ?? []))].sort();
-  bar.innerHTML = allTags.map(tag =>
-    `<span class="tag-filter-pill${activeTagFilter === tag ? ' active' : ''}" onclick="toggleTagFilter('${esc(tag)}')">${esc(tag)}</span>`
+  const allTags = [...new Set(allBooks.flatMap(b => b.tags ?? []))];
+  // Pinned tags first (in order), then the rest alphabetically
+  const pinned = PINNED_TAGS.filter(t => allTags.includes(t));
+  const rest   = allTags.filter(t => !PINNED_TAGS.includes(t)).sort();
+  const sorted = [...pinned, ...rest];
+
+  bar.innerHTML = sorted.map(tag =>
+    `<span class="tag-filter-pill${activeTagFilter === tag ? ' active' : ''}" data-tag="${esc(tag)}" onclick="toggleTagFilter('${esc(tag)}')">${esc(tag)}</span>`
   ).join('');
+
+  // Collapse to 2 rows after layout settles
+  requestAnimationFrame(() => collapseTagBar(bar));
+}
+
+function collapseTagBar(bar) {
+  if (tagBarExpanded) return;   // user already expanded — leave it open
+
+  const pills = [...bar.querySelectorAll('.tag-filter-pill')];
+  if (!pills.length) return;
+
+  // Walk pills and count distinct top positions (= rows in the flex layout)
+  let rowCount  = 1;
+  let lastTop   = pills[0].offsetTop;
+  let cutoff    = pills.length;   // index of first pill beyond row 2
+
+  for (let i = 1; i < pills.length; i++) {
+    const top = pills[i].offsetTop;
+    if (top > lastTop + 2) {      // new row (2 px tolerance for sub-pixel rounding)
+      rowCount++;
+      lastTop = top;
+      if (rowCount > 2) { cutoff = i; break; }
+    }
+  }
+
+  if (cutoff >= pills.length) return;   // everything fits in 2 rows already
+
+  // Hide pills beyond row 2
+  const hidden = pills.length - cutoff;
+  for (let i = cutoff; i < pills.length; i++) pills[i].style.display = 'none';
+
+  // Append expand button
+  const btn = document.createElement('span');
+  btn.className   = 'tag-expand-btn';
+  btn.textContent = `+${hidden} more…`;
+  btn.onclick = () => {
+    tagBarExpanded = true;
+    pills.forEach(p => { p.style.display = ''; });
+    btn.remove();
+  };
+  bar.appendChild(btn);
 }
 
 function toggleTagFilter(tag) {
@@ -511,6 +647,7 @@ function renderBookList() {
       <div class="book-item-info">
         <div class="book-item-title">${esc(b.title)}</div>
         <div class="book-item-author">${esc(b.author)}</div>
+        ${seriesLabel(b) ? `<div class="book-item-series">${esc(seriesLabel(b))}</div>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -542,16 +679,22 @@ function showBookDetail(book, isNew) {
   document.getElementById('detail-heading').textContent = isNew ? 'New Book' : book.title;
   document.getElementById('btn-delete-book').style.display = isNew ? 'none' : '';
 
-  document.getElementById('f-title').value  = book.title   ?? '';
-  document.getElementById('f-author').value = book.author  ?? '';
-  document.getElementById('f-pages').value  = book.pageCount ?? '';
-  document.getElementById('f-isbn').value   = book.isbn    ?? '';
-  document.getElementById('f-gbid').value   = book.googleBooksId ?? '';
-  document.getElementById('f-grurl').value  = book.goodreadsUrl  ?? '';
-  document.getElementById('f-cover').value  = book.coverUrl ?? '';
-  document.getElementById('f-desc').value   = book.description ?? '';
+  document.getElementById('f-title').value  = book.title          ?? '';
+  document.getElementById('f-author').value = book.author         ?? '';
+  document.getElementById('f-pages').value     = book.pageCount      ?? '';
+  document.getElementById('f-isbn').value      = book.isbn           ?? '';
+  document.getElementById('f-series').value    = book.series         ?? '';
+  document.getElementById('f-seriesidx').value = book.seriesIndex    ?? '';
+  document.getElementById('f-olid').value   = book.openLibraryId  ?? '';
+  document.getElementById('f-gbid').value   = book.googleBooksId  ?? '';
+  document.getElementById('f-amzid').value  = book.amazonId       ?? '';
+  document.getElementById('f-rrid').value   = book.royalRoadId    ?? '';
+  document.getElementById('f-grurl').value  = book.goodreadsUrl   ?? '';
+  document.getElementById('f-cover').value  = book.coverUrl       ?? '';
+  document.getElementById('f-desc').value   = book.description    ?? '';
 
   updateCoverPreview();
+  updateBookLinks(book);
   renderTags(book.tags ?? []);
   document.getElementById('gb-results').className = '';
 }
@@ -620,13 +763,18 @@ async function saveBook(e) {
   const payload = {
     title:        document.getElementById('f-title').value.trim(),
     author:       document.getElementById('f-author').value.trim(),
-    pageCount:    parseInt(document.getElementById('f-pages').value) || null,
-    isbn:         document.getElementById('f-isbn').value.trim() || null,
-    googleBooksId: document.getElementById('f-gbid').value.trim() || null,
-    goodreadsUrl:  document.getElementById('f-grurl').value.trim() || null,
-    coverUrl:     document.getElementById('f-cover').value.trim() || null,
-    description:  document.getElementById('f-desc').value.trim() || null,
-    tags:         currentTags,
+    pageCount:     parseInt(document.getElementById('f-pages').value) || null,
+    isbn:          document.getElementById('f-isbn').value.trim()    || null,
+    openLibraryId: document.getElementById('f-olid').value.trim()    || null,
+    googleBooksId: document.getElementById('f-gbid').value.trim()    || null,
+    amazonId:      document.getElementById('f-amzid').value.trim()   || null,
+    royalRoadId:   document.getElementById('f-rrid').value.trim()    || null,
+    goodreadsUrl:  document.getElementById('f-grurl').value.trim()   || null,
+    coverUrl:      document.getElementById('f-cover').value.trim()   || null,
+    description:   document.getElementById('f-desc').value.trim()    || null,
+    tags:          currentTags,
+    series:        document.getElementById('f-series').value.trim()   || null,
+    seriesIndex:   parseFloat(document.getElementById('f-seriesidx').value) || null,
   };
 
   try {
@@ -686,83 +834,216 @@ document.getElementById('btn-delete-book').addEventListener('click', async () =>
 // ── Search filter ─────────────────────────────────────────────────────────────
 document.getElementById('search-input').addEventListener('input', applyFilter);
 
-// ── OpenLibrary book search ───────────────────────────────────────────────────
+// ── Multi-source book search ──────────────────────────────────────────────────
+let activeSearchSource = 'ol';  // 'ol' | 'gb'
+
+// Source tab switching
+document.querySelectorAll('.search-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    activeSearchSource = tab.dataset.source;
+    document.querySelectorAll('.search-tab').forEach(t => t.classList.toggle('active', t === tab));
+    document.getElementById('gb-results').classList.remove('visible');
+  });
+});
+
 document.getElementById('btn-gb-search').addEventListener('click', async () => {
   const title  = document.getElementById('f-title').value.trim();
   const author = document.getElementById('f-author').value.trim();
   if (!title && !author) { toast('Enter a title or author to search', true); return; }
-
-  const params = new URLSearchParams({ limit: '8', fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,first_sentence' });
-  if (title)  params.set('title',  title);
-  if (author) params.set('author', author);
 
   const gbResults = document.getElementById('gb-results');
   gbResults.innerHTML = '<div style="color:var(--muted);padding:8px">Searching…</div>';
   gbResults.classList.add('visible');
 
   try {
-    const res  = await fetch(`https://openlibrary.org/search.json?${params}`);
-    const data = await res.json();
-    const items = data.docs ?? [];
-
-    if (!items.length) {
-      gbResults.innerHTML = '<div style="color:var(--muted);padding:8px">No results found.</div>';
-      return;
+    if (activeSearchSource === 'ol') {
+      await searchOpenLibrary(title, author, gbResults);
+    } else {
+      await searchGoogleBooks(title, author, gbResults);
     }
-    gbResults.innerHTML = items.map((doc, i) => {
-      const auth  = (doc.author_name ?? []).join(', ');
-      const thumb = doc.cover_i
-        ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
-        : '';
-      const imgHtml = thumb
-        ? `<img class="gb-thumb" src="${esc(thumb)}" alt="" loading="lazy">`
-        : `<div class="gb-thumb" style="background:var(--border)"></div>`;
-      return `<div class="gb-result" onclick="applyGBResult(${i})" data-i="${i}">
-        ${imgHtml}
-        <div class="gb-info">
-          <div class="gb-title">${esc(doc.title ?? '')}</div>
-          <div class="gb-author">${esc(auth)}</div>
-        </div>
-      </div>`;
-    }).join('');
-    gbResults.dataset.results = JSON.stringify(items);
   } catch (e) {
     console.error('Book search error:', e);
     gbResults.innerHTML = `<div style="color:var(--muted);padding:8px">Search failed: ${esc(e.message)}</div>`;
   }
 });
 
-function applyGBResult(i) {
+async function searchOpenLibrary(title, author, container) {
+  const params = new URLSearchParams({
+    limit: '8',
+    fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,first_sentence',
+  });
+  if (title)  params.set('title',  title);
+  if (author) params.set('author', author);
+
+  const res  = await fetch(`https://openlibrary.org/search.json?${params}`);
+  const data = await res.json();
+  const items = (data.docs ?? []).map(d => ({ ...d, _source: 'ol' }));
+
+  if (!items.length) {
+    container.innerHTML = '<div style="color:var(--muted);padding:8px">No results found on OpenLibrary.</div>';
+    return;
+  }
+  renderSearchResults(items, container);
+}
+
+async function searchGoogleBooks(title, author, container) {
+  const q = [title ? `intitle:${title}` : '', author ? `inauthor:${author}` : ''].filter(Boolean).join('+');
+  const res  = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8&printType=books`);
+  const data = await res.json();
+  const items = (data.items ?? []).map(d => ({ ...d, _source: 'gb' }));
+
+  if (!items.length) {
+    container.innerHTML = '<div style="color:var(--muted);padding:8px">No results found on Google Books.</div>';
+    return;
+  }
+  renderSearchResults(items, container);
+}
+
+function renderSearchResults(items, container) {
+  container.innerHTML = items.map((doc, i) => {
+    let auth, thumb, titleText;
+    if (doc._source === 'ol') {
+      auth      = (doc.author_name ?? []).join(', ');
+      thumb     = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
+      titleText = doc.title ?? '';
+    } else {
+      const info = doc.volumeInfo ?? {};
+      auth      = (info.authors ?? []).join(', ');
+      thumb     = info.imageLinks?.thumbnail?.replace('http:', 'https:') ?? '';
+      titleText = info.title ?? '';
+    }
+    const imgHtml = thumb
+      ? `<img class="gb-thumb" src="${esc(thumb)}" alt="" loading="lazy">`
+      : `<div class="gb-thumb" style="background:var(--border)"></div>`;
+    const badgeClass = doc._source === 'ol' ? 'badge-ol' : 'badge-gb';
+    const badgeLabel = doc._source === 'ol' ? 'OL' : 'GB';
+    return `<div class="gb-result" onclick="applySearchResult(${i})" data-i="${i}">
+      ${imgHtml}
+      <div class="gb-info">
+        <div class="gb-title">${esc(titleText)}</div>
+        <div class="gb-author">${esc(auth)}</div>
+      </div>
+      <span class="gb-source-badge ${badgeClass}">${badgeLabel}</span>
+    </div>`;
+  }).join('');
+  container.dataset.results = JSON.stringify(items);
+}
+
+function applySearchResult(i) {
   const items = JSON.parse(document.getElementById('gb-results').dataset.results ?? '[]');
   const doc = items[i];
   if (!doc) return;
 
-  // OpenLibrary cover (medium size, https)
-  const thumb = doc.cover_i
-    ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
-    : '';
-  // Prefer ISBN-13 (13-digit), fall back to any ISBN
-  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13)
-              ?? (doc.isbn ?? [])[0]
-              ?? '';
-  // OpenLibrary work key e.g. "/works/OL12345W" — strip the leading path
+  if (doc._source === 'ol') {
+    applyOLResult(doc);
+  } else {
+    applyGBResult(doc);
+  }
+  document.getElementById('gb-results').classList.remove('visible');
+  updateBookLinksFromForm();
+}
+
+function applyOLResult(doc) {
+  const thumb  = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
+  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13) ?? (doc.isbn ?? [])[0] ?? '';
   const olKey  = (doc.key ?? '').replace('/works/', '');
   const desc   = typeof doc.first_sentence === 'object'
-    ? (doc.first_sentence?.value ?? '')
-    : (doc.first_sentence ?? '');
+    ? (doc.first_sentence?.value ?? '') : (doc.first_sentence ?? '');
 
   document.getElementById('f-title').value  = doc.title ?? '';
   document.getElementById('f-author').value = (doc.author_name ?? []).join(', ');
   document.getElementById('f-pages').value  = doc.number_of_pages_median ?? '';
   document.getElementById('f-isbn').value   = isbn13;
-  document.getElementById('f-gbid').value   = olKey;   // reusing googleBooksId field for OL key
-  document.getElementById('f-cover').value  = thumb;
-  document.getElementById('f-desc').value   = desc.substring(0, 300);
+  document.getElementById('f-olid').value   = olKey;    // OpenLibrary Work ID → proper field
+  if (!document.getElementById('f-cover').value) document.getElementById('f-cover').value = thumb;
+  if (!document.getElementById('f-desc').value)  document.getElementById('f-desc').value  = desc.substring(0, 300);
 
   updateCoverPreview();
-  document.getElementById('gb-results').classList.remove('visible');
-  toast('Book info applied from Google Books.');
+  toast('Applied metadata from OpenLibrary.');
 }
+
+function applyGBResult(doc) {
+  const info   = doc.volumeInfo ?? {};
+  const ids    = doc.industryIdentifiers ?? info.industryIdentifiers ?? [];
+  const isbn13 = ids.find(x => x.type === 'ISBN_13')?.identifier ?? ids[0]?.identifier ?? '';
+  const thumb  = info.imageLinks?.thumbnail?.replace('http:', 'https:').replace('zoom=1', 'zoom=2') ?? '';
+  const desc   = info.description?.replace(/<[^>]+>/g, '') ?? '';
+
+  document.getElementById('f-title').value  = info.title  ?? '';
+  document.getElementById('f-author').value = (info.authors ?? []).join(', ');
+  document.getElementById('f-pages').value  = info.pageCount ?? '';
+  document.getElementById('f-isbn').value   = isbn13;
+  document.getElementById('f-gbid').value   = doc.id ?? '';   // Google Books volume ID
+  if (!document.getElementById('f-cover').value) document.getElementById('f-cover').value = thumb;
+  if (!document.getElementById('f-desc').value)  document.getElementById('f-desc').value  = desc.substring(0, 300);
+
+  updateCoverPreview();
+  toast('Applied metadata from Google Books.');
+}
+
+// ── Link badges ───────────────────────────────────────────────────────────────
+
+function updateBookLinks(book) {
+  updateBookLinksFromValues({
+    openLibraryId: book.openLibraryId,
+    googleBooksId: book.googleBooksId,
+    amazonId:      book.amazonId,
+    royalRoadId:   book.royalRoadId,
+    goodreadsUrl:  book.goodreadsUrl,
+    isbn:          book.isbn,
+    title:         book.title,
+    author:        book.author,
+  });
+}
+
+function updateBookLinksFromForm() {
+  updateBookLinksFromValues({
+    openLibraryId: document.getElementById('f-olid').value.trim(),
+    googleBooksId: document.getElementById('f-gbid').value.trim(),
+    amazonId:      document.getElementById('f-amzid').value.trim(),
+    royalRoadId:   document.getElementById('f-rrid').value.trim(),
+    goodreadsUrl:  document.getElementById('f-grurl').value.trim(),
+    isbn:          document.getElementById('f-isbn').value.trim(),
+    title:         document.getElementById('f-title').value.trim(),
+    author:        document.getElementById('f-author').value.trim(),
+  });
+}
+
+function updateBookLinksFromValues({ openLibraryId, googleBooksId, amazonId, royalRoadId, goodreadsUrl, isbn, title, author }) {
+  const links = [];
+
+  if (openLibraryId) {
+    links.push(`<a class="book-link-badge badge-ol2" href="https://openlibrary.org/works/${encodeURIComponent(openLibraryId)}" target="_blank">📖 Open Library</a>`);
+  }
+  if (googleBooksId) {
+    links.push(`<a class="book-link-badge badge-gb2" href="https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}" target="_blank">📗 Google Books</a>`);
+  }
+  if (amazonId) {
+    links.push(`<a class="book-link-badge badge-amz" href="https://www.amazon.com/dp/${encodeURIComponent(amazonId)}" target="_blank">🛒 Amazon</a>`);
+  } else {
+    const amzQ = encodeURIComponent((title + ' ' + author).trim());
+    links.push(`<a class="book-link-badge badge-amz" href="https://www.amazon.com/s?k=${amzQ}&i=stripbooks" target="_blank">🔍 Search Amazon</a>`);
+  }
+  if (royalRoadId) {
+    links.push(`<a class="book-link-badge badge-rr" href="https://www.royalroad.com/fiction/${encodeURIComponent(royalRoadId)}" target="_blank">👑 Royal Road</a>`);
+  }
+  if (goodreadsUrl) {
+    links.push(`<a class="book-link-badge badge-gr" href="${esc(goodreadsUrl)}" target="_blank">⭐ Goodreads</a>`);
+  } else if (isbn || title) {
+    const grQ = isbn ? `isbn:${isbn}` : `${title} ${author}`;
+    links.push(`<a class="book-link-badge badge-gr" href="https://www.goodreads.com/search?q=${encodeURIComponent(grQ)}" target="_blank">🔍 Search GoodReads</a>`);
+  }
+
+  const row = document.getElementById('book-links-row');
+  const container = document.getElementById('book-links');
+  container.innerHTML = links.join('');
+  row.style.display = links.length ? '' : 'none';
+}
+
+// Update link badges whenever any ID field changes
+['f-olid','f-gbid','f-amzid','f-rrid','f-grurl','f-isbn'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', updateBookLinksFromForm);
+});
 
 // ── Reads ─────────────────────────────────────────────────────────────────────
 function showReadsSection() {
@@ -900,6 +1181,16 @@ document.getElementById('btn-save-read').addEventListener('click', async () => {
 });
 
 // ── Util ─────────────────────────────────────────────────────────────────────
+
+/** Format a book's series + index as "Series Name [N]" or "" if no series. */
+function seriesLabel(book) {
+  if (!book?.series) return '';
+  if (book.seriesIndex == null) return book.series;
+  const n = parseFloat(book.seriesIndex);
+  const idx = isNaN(n) ? '' : (n % 1 === 0 ? String(Math.round(n)) : String(n));
+  return idx ? `${book.series} [${idx}]` : book.series;
+}
+
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }

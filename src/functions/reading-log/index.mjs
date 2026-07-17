@@ -110,12 +110,17 @@ async function createBook(event) {
     title:        body.title.trim(),
     author:       body.author.trim(),
     googleBooksId: body.googleBooksId ?? null,
-    goodreadsUrl:  body.goodreadsUrl ?? null,
-    coverUrl:      body.coverUrl ?? null,
-    pageCount:     body.pageCount ?? null,
-    description:   body.description ?? null,
-    isbn:          body.isbn ?? null,
-    tags:          body.tags ?? [],
+    openLibraryId: body.openLibraryId ?? null,
+    amazonId:      body.amazonId      ?? null,
+    royalRoadId:   body.royalRoadId   ?? null,
+    series:        body.series        ?? null,
+    seriesIndex:   body.seriesIndex   ?? null,
+    goodreadsUrl:  body.goodreadsUrl  ?? null,
+    coverUrl:      body.coverUrl      ?? null,
+    pageCount:     body.pageCount     ?? null,
+    description:   body.description  ?? null,
+    isbn:          body.isbn          ?? null,
+    tags:          body.tags          ?? [],
     createdAt:    ts,
     updatedAt:    ts,
   };
@@ -136,7 +141,7 @@ async function updateBook(event) {
 
   // All field names are aliased to avoid DynamoDB reserved word conflicts
   // (e.g. title, description, isbn are reserved keywords)
-  const allowed = ['title','author','googleBooksId','goodreadsUrl','coverUrl','pageCount','description','isbn','tags'];
+  const allowed = ['title','author','googleBooksId','openLibraryId','amazonId','royalRoadId','goodreadsUrl','coverUrl','pageCount','description','isbn','tags','series','seriesIndex'];
   const sets = ['updatedAt = :updatedAt'];
   const exprValues = { ':updatedAt': now() };
   const exprNames = {};
