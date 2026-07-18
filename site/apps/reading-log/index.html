@@ -137,8 +137,9 @@
     .gb-title { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .gb-author { font-size: 12px; color: var(--muted); }
     .gb-source-badge { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px; flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
-    .badge-ol { background: #1a3460; color: #aaccff; border: 1px solid #5588cc; }
-    .badge-gb { background: #1a3828; color: #88ddaa; border: 1px solid #44aa66; }
+    .badge-ol  { background: #1a3460; color: #aaccff; border: 1px solid #5588cc; }
+    .badge-gb  { background: #1a3828; color: #88ddaa; border: 1px solid #44aa66; }
+    .gb-result.no-id { opacity: 0.5; }
     /* ── External link badges ── */
     .book-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .book-link-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
@@ -252,6 +253,8 @@
           <div class="search-source-tabs">
             <button class="search-tab active" data-source="ol">OpenLibrary</button>
             <button class="search-tab" data-source="gb">Google Books</button>
+            <button class="search-tab" data-source="amz">Amazon</button>
+            <button class="search-tab" data-source="gr">Goodreads</button>
             <button class="btn-primary btn-sm" id="btn-gb-search" style="margin-left:auto;">Search</button>
           </div>
           <div id="gb-results"></div>
@@ -885,7 +888,7 @@ document.getElementById('btn-delete-book').addEventListener('click', async () =>
 document.getElementById('search-input').addEventListener('input', applyFilter);
 
 // ── Multi-source book search ──────────────────────────────────────────────────
-let activeSearchSource = 'ol';  // 'ol' | 'gb'
+let activeSearchSource = 'ol';  // 'ol' | 'gb' | 'amz' | 'gr'
 
 // Source tab switching
 document.querySelectorAll('.search-tab').forEach(tab => {
@@ -906,11 +909,10 @@ document.getElementById('btn-gb-search').addEventListener('click', async () => {
   gbResults.classList.add('visible');
 
   try {
-    if (activeSearchSource === 'ol') {
-      await searchOpenLibrary(title, author, gbResults);
-    } else {
-      await searchGoogleBooks(title, author, gbResults);
-    }
+    if      (activeSearchSource === 'ol')  await searchOpenLibrary(title, author, gbResults);
+    else if (activeSearchSource === 'gb')  await searchGoogleBooks(title, author, gbResults);
+    else if (activeSearchSource === 'amz') await searchAmazon(title, author, gbResults);
+    else if (activeSearchSource === 'gr')  await searchGoodreads(title, author, gbResults);
   } catch (e) {
     console.error('Book search error:', e);
     gbResults.innerHTML = `<div style="color:var(--muted);padding:8px">Search failed: ${esc(e.message)}</div>`;
@@ -949,25 +951,108 @@ async function searchGoogleBooks(title, author, container) {
   renderSearchResults(items, container);
 }
 
+// Convert a 13-digit ISBN-13 (978-prefix) to its ISBN-10 equivalent.
+// For physical books, ISBN-10 == Amazon ASIN, so this is the reliable fallback.
+function isbn13ToIsbn10(isbn13) {
+  if (!isbn13 || isbn13.length !== 13 || !isbn13.startsWith('978')) return '';
+  const core = isbn13.slice(3, 12);  // 9 digits
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(core[i]) * (10 - i);
+  const check = (11 - (sum % 11)) % 11;
+  return core + (check === 10 ? 'X' : String(check));
+}
+
+// Amazon: searches OpenLibrary requesting the id_amazon identifier field.
+// Amazon ASINs come in two flavours:
+//   • B-code  (e.g. B008PE3UH8) — Kindle / digital editions; OL has these occasionally.
+//   • ISBN-10 (e.g. 0441013597) — physical editions; OL has these more reliably,
+//     and we can also derive one from any ISBN-13 the record carries.
+// Sorting: B-code first → derivable ISBN-10 → nothing.
+async function searchAmazon(title, author, container) {
+  const params = new URLSearchParams({
+    limit: '12',
+    fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,id_amazon',
+  });
+  if (title)  params.set('title',  title);
+  if (author) params.set('author', author);
+
+  const res  = await fetch(`https://openlibrary.org/search.json?${params}`);
+  const data = await res.json();
+  let items = (data.docs ?? []).map(d => ({ ...d, _source: 'amz' }));
+
+  function amzScore(doc) {
+    if ((doc.id_amazon ?? []).some(x => /^B/i.test(x))) return 2;      // Kindle B-code
+    const isbn13 = (doc.isbn ?? []).find(x => x.length === 13 && x.startsWith('978')) ?? '';
+    if ((doc.id_amazon ?? []).some(x => /^\d{9}[\dX]$/i.test(x)) || isbn13) return 1; // ISBN-10
+    return 0;
+  }
+  items.sort((a, b) => amzScore(b) - amzScore(a));
+
+  if (!items.length) {
+    container.innerHTML = '<div style="color:var(--muted);padding:8px">No results found.</div>';
+    return;
+  }
+  renderSearchResults(items, container);
+}
+
+// Goodreads: searches OpenLibrary requesting the id_goodreads external identifier field.
+// The Goodreads public API was shut down (2020), but OL aggregates GR IDs from linked
+// editions. Results with a known Goodreads ID are sorted first.
+async function searchGoodreads(title, author, container) {
+  const params = new URLSearchParams({
+    limit: '12',
+    fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,id_goodreads',
+  });
+  if (title)  params.set('title',  title);
+  if (author) params.set('author', author);
+
+  const res  = await fetch(`https://openlibrary.org/search.json?${params}`);
+  const data = await res.json();
+  let items = (data.docs ?? []).map(d => ({ ...d, _source: 'gr' }));
+  // Sort: items with a known Goodreads ID first
+  items.sort((a, b) => ((b.id_goodreads ?? []).length > 0) - ((a.id_goodreads ?? []).length > 0));
+
+  if (!items.length) {
+    container.innerHTML = '<div style="color:var(--muted);padding:8px">No results found.</div>';
+    return;
+  }
+  renderSearchResults(items, container);
+}
+
 function renderSearchResults(items, container) {
   container.innerHTML = items.map((doc, i) => {
-    let auth, thumb, titleText;
-    if (doc._source === 'ol') {
-      auth      = (doc.author_name ?? []).join(', ');
-      thumb     = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
-      titleText = doc.title ?? '';
-    } else {
+    let auth, thumb, titleText, hasId = true;
+    if (doc._source === 'gb') {
       const info = doc.volumeInfo ?? {};
       auth      = (info.authors ?? []).join(', ');
       thumb     = info.imageLinks?.thumbnail?.replace('http:', 'https:') ?? '';
       titleText = info.title ?? '';
+    } else {
+      // ol, amz, gr — all OL-shaped data
+      auth      = (doc.author_name ?? []).join(', ');
+      thumb     = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
+      titleText = doc.title ?? '';
+      if (doc._source === 'amz') {
+        const hasBcode  = (doc.id_amazon ?? []).some(x => /^B/i.test(x));
+        const hasIsbn10 = (doc.id_amazon ?? []).some(x => /^\d{9}[\dX]$/i.test(x));
+        const isbn13    = (doc.isbn ?? []).find(x => x.length === 13 && x.startsWith('978')) ?? '';
+        hasId = hasBcode || hasIsbn10 || !!isbn13;
+        doc._amzLabel = hasBcode ? 'AMZ ✓' : hasId ? 'AMZ' : 'AMZ';
+      }
+      if (doc._source === 'gr')  hasId = (doc.id_goodreads ?? []).length > 0;
     }
     const imgHtml = thumb
       ? `<img class="gb-thumb" src="${esc(thumb)}" alt="" loading="lazy">`
       : `<div class="gb-thumb" style="background:var(--border)"></div>`;
-    const badgeClass = doc._source === 'ol' ? 'badge-ol' : 'badge-gb';
-    const badgeLabel = doc._source === 'ol' ? 'OL' : 'GB';
-    return `<div class="gb-result" onclick="applySearchResult(${i})" data-i="${i}">
+    const badges = {
+      ol:  ['badge-ol',  'OL'],
+      gb:  ['badge-gb',  'GB'],
+      amz: ['badge-amz', doc._amzLabel ?? 'AMZ'],
+      gr:  ['badge-gr',  hasId ? 'GR ✓'  : 'GR'],
+    };
+    const [badgeClass, badgeLabel] = badges[doc._source] ?? ['badge-ol', '?'];
+    const dimClass = (!hasId && (doc._source === 'amz' || doc._source === 'gr')) ? ' no-id' : '';
+    return `<div class="gb-result${dimClass}" onclick="applySearchResult(${i})" data-i="${i}">
       ${imgHtml}
       <div class="gb-info">
         <div class="gb-title">${esc(titleText)}</div>
@@ -984,11 +1069,11 @@ function applySearchResult(i) {
   const doc = items[i];
   if (!doc) return;
 
-  if (doc._source === 'ol') {
-    applyOLResult(doc);
-  } else {
-    applyGBResult(doc);
-  }
+  if      (doc._source === 'ol')  applyOLResult(doc);
+  else if (doc._source === 'gb')  applyGBResult(doc);
+  else if (doc._source === 'amz') applyAmazonResult(doc);
+  else if (doc._source === 'gr')  applyGoodreadsResult(doc);
+
   document.getElementById('gb-results').classList.remove('visible');
   updateBookLinksFromForm();
 }
@@ -1029,6 +1114,55 @@ function applyGBResult(doc) {
 
   updateCoverPreview();
   toast('Applied metadata from Google Books.');
+}
+
+function applyAmazonResult(doc) {
+  const thumb      = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
+  const isbn13     = (doc.isbn ?? []).find(x => x.length === 13) ?? (doc.isbn ?? [])[0] ?? '';
+  const olKey      = (doc.key ?? '').replace('/works/', '');
+
+  // Priority order for ASIN:
+  //  1. Kindle B-code from OL's id_amazon (e.g. B008PE3UH8)
+  //  2. Numeric ISBN-10 from OL's id_amazon (valid physical ASIN)
+  //  3. ISBN-10 derived mathematically from the book's ISBN-13
+  const bCode      = (doc.id_amazon ?? []).find(x => /^B/i.test(x)) ?? '';
+  const isbn10raw  = (doc.id_amazon ?? []).find(x => /^\d{9}[\dX]$/i.test(x)) ?? '';
+  const isbn10calc = isbn13ToIsbn10(isbn13);
+  const asin = bCode || isbn10raw || isbn10calc;
+
+  document.getElementById('f-title').value  = doc.title ?? '';
+  document.getElementById('f-author').value = (doc.author_name ?? []).join(', ');
+  if (doc.number_of_pages_median) document.getElementById('f-pages').value = doc.number_of_pages_median;
+  if (isbn13) document.getElementById('f-isbn').value  = isbn13;
+  if (olKey)  document.getElementById('f-olid').value  = olKey;
+  if (asin)   document.getElementById('f-amzid').value = asin;
+  if (!document.getElementById('f-cover').value && thumb) document.getElementById('f-cover').value = thumb;
+
+  updateCoverPreview();
+  const msg = bCode      ? `Applied + Kindle ASIN ${bCode}.`
+            : isbn10raw  ? `Applied + physical ASIN ${isbn10raw} (from ISBN-10).`
+            : isbn10calc ? `Applied + physical ASIN ${isbn10calc} (derived from ISBN-13).`
+            : 'Applied metadata — no Amazon ID found for this edition.';
+  toast(msg);
+}
+
+function applyGoodreadsResult(doc) {
+  const thumb  = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
+  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13) ?? (doc.isbn ?? [])[0] ?? '';
+  const olKey  = (doc.key ?? '').replace('/works/', '');
+  const grId   = (doc.id_goodreads ?? [])[0] ?? '';
+  const grUrl  = grId ? `https://www.goodreads.com/book/show/${grId}` : '';
+
+  document.getElementById('f-title').value  = doc.title ?? '';
+  document.getElementById('f-author').value = (doc.author_name ?? []).join(', ');
+  if (doc.number_of_pages_median) document.getElementById('f-pages').value = doc.number_of_pages_median;
+  if (isbn13) document.getElementById('f-isbn').value  = isbn13;
+  if (olKey)  document.getElementById('f-olid').value  = olKey;
+  if (grUrl)  document.getElementById('f-grurl').value = grUrl;
+  if (!document.getElementById('f-cover').value && thumb) document.getElementById('f-cover').value = thumb;
+
+  updateCoverPreview();
+  toast(grUrl ? 'Applied metadata + Goodreads URL.' : 'Applied metadata (no Goodreads ID found for this edition).');
 }
 
 // ── Link badges ───────────────────────────────────────────────────────────────
