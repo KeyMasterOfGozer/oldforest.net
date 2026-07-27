@@ -128,8 +128,8 @@
                   color: var(--muted); font-size: 12px; font-weight: 600; padding: 4px 12px; cursor: pointer; transition: background .1s, color .1s, border-color .1s; }
     .search-tab:hover { border-color: var(--accent); color: var(--text); }
     .search-tab.active { background: var(--accent); border-color: var(--accent); color: #0d1a0b; }
-    #gb-results { margin-top: 4px; display: none; flex-direction: column; gap: 4px; }
-    #gb-results.visible { display: flex; }
+    #search-results { margin-top: 4px; display: none; flex-direction: column; gap: 4px; }
+    #search-results.visible { display: flex; }
     .gb-result { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: border-color .1s; }
     .gb-result:hover { border-color: var(--accent); }
     .gb-thumb { width: 28px; height: 40px; object-fit: cover; border-radius: 2px; background: var(--border); flex-shrink: 0; }
@@ -145,11 +145,10 @@
     .book-link-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
                        padding: 3px 8px; border-radius: 4px; text-decoration: none; transition: opacity .15s; }
     .book-link-badge:hover { opacity: .8; text-decoration: none; }
-    .badge-amz  { background: #ff9900; color: #111; }
-    .badge-gr   { background: #553b08; color: #e8d8b0; border: 1px solid #8b6914; }
-    .badge-ol2  { background: #1a3460; color: #aaccff; border: 1px solid #5588cc; }
-    .badge-rr   { background: #3a1060; color: #d0aaff; border: 1px solid #8855cc; }
-    .badge-gb2  { background: #1a3828; color: #88ddaa; border: 1px solid #44aa66; }
+    .badge-amz { background: #ff9900; color: #111; }
+    .badge-gr  { background: #553b08; color: #e8d8b0; border: 1px solid #8b6914; }
+    .badge-rr  { background: #3a1060; color: #d0aaff; border: 1px solid #8855cc; }
+    /* badge-ol and badge-gb are shared between search result pills and link badges */
 
     /* ── Reads section ── */
     #reads-section { display: none; }
@@ -257,7 +256,7 @@
             <button class="search-tab" data-source="gr">Goodreads</button>
             <button class="btn-primary btn-sm" id="btn-gb-search" style="margin-left:auto;">Search</button>
           </div>
-          <div id="gb-results"></div>
+          <div id="search-results"></div>
         </div>
 
         <!-- Book form -->
@@ -424,6 +423,7 @@
 
 <div id="toast"></div>
 
+<script src="/js/util.js"></script>
 <script>
 'use strict';
 
@@ -665,6 +665,7 @@ function collapseTagBar(bar) {
 
 function toggleTagFilter(tag) {
   activeTagFilter = activeTagFilter === tag ? null : tag;
+  tagBarExpanded  = false;   // re-evaluate collapse on every tag change
   renderTagFilterBar();
   applyFilter();
 }
@@ -749,7 +750,7 @@ function showBookDetail(book, isNew) {
   updateCoverPreview();
   updateBookLinks(book);
   renderTags(book.tags ?? []);
-  document.getElementById('gb-results').className = '';
+  document.getElementById('search-results').className = '';
 }
 
 function showNewBookForm() {
@@ -842,7 +843,6 @@ async function saveBook(e) {
       const { book } = await api('POST', '/v1/reading/books', payload);
       selectedBook = book;
       allBooks.push(book);
-      allBooks.sort((a,b) => a.title.localeCompare(b.title));
       showBookDetail(book, false);
       showReadsSection();
     }
@@ -895,7 +895,7 @@ document.querySelectorAll('.search-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     activeSearchSource = tab.dataset.source;
     document.querySelectorAll('.search-tab').forEach(t => t.classList.toggle('active', t === tab));
-    document.getElementById('gb-results').classList.remove('visible');
+    document.getElementById('search-results').classList.remove('visible');
   });
 });
 
@@ -904,18 +904,18 @@ document.getElementById('btn-gb-search').addEventListener('click', async () => {
   const author = document.getElementById('f-author').value.trim();
   if (!title && !author) { toast('Enter a title or author to search', true); return; }
 
-  const gbResults = document.getElementById('gb-results');
-  gbResults.innerHTML = '<div style="color:var(--muted);padding:8px">Searching…</div>';
-  gbResults.classList.add('visible');
+  const searchResults = document.getElementById('search-results');
+  searchResults.innerHTML = '<div style="color:var(--muted);padding:8px">Searching…</div>';
+  searchResults.classList.add('visible');
 
   try {
-    if      (activeSearchSource === 'ol')  await searchOpenLibrary(title, author, gbResults);
-    else if (activeSearchSource === 'gb')  await searchGoogleBooks(title, author, gbResults);
-    else if (activeSearchSource === 'amz') await searchAmazon(title, author, gbResults);
-    else if (activeSearchSource === 'gr')  await searchGoodreads(title, author, gbResults);
+    if      (activeSearchSource === 'ol')  await searchOpenLibrary(title, author, searchResults);
+    else if (activeSearchSource === 'gb')  await searchGoogleBooks(title, author, searchResults);
+    else if (activeSearchSource === 'amz') await searchAmazon(title, author, searchResults);
+    else if (activeSearchSource === 'gr')  await searchGoodreads(title, author, searchResults);
   } catch (e) {
     console.error('Book search error:', e);
-    gbResults.innerHTML = `<div style="color:var(--muted);padding:8px">Search failed: ${esc(e.message)}</div>`;
+    searchResults.innerHTML = `<div style="color:var(--muted);padding:8px">Search failed: ${esc(e.message)}</div>`;
   }
 });
 
@@ -962,6 +962,15 @@ function isbn13ToIsbn10(isbn13) {
   return core + (check === 10 ? 'X' : String(check));
 }
 
+// Score an OL result for how well it can supply an Amazon ASIN.
+// 2 = has a Kindle B-code; 1 = has or can derive an ISBN-10; 0 = nothing.
+function amzScore(doc) {
+  if ((doc.id_amazon ?? []).some(x => /^B/i.test(x))) return 2;
+  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13 && x.startsWith('978')) ?? '';
+  if ((doc.id_amazon ?? []).some(x => /^\d{9}[\dX]$/i.test(x)) || isbn13) return 1;
+  return 0;
+}
+
 // Amazon: searches OpenLibrary requesting the id_amazon identifier field.
 // Amazon ASINs come in two flavours:
 //   • B-code  (e.g. B008PE3UH8) — Kindle / digital editions; OL has these occasionally.
@@ -979,13 +988,6 @@ async function searchAmazon(title, author, container) {
   const res  = await fetch(`https://openlibrary.org/search.json?${params}`);
   const data = await res.json();
   let items = (data.docs ?? []).map(d => ({ ...d, _source: 'amz' }));
-
-  function amzScore(doc) {
-    if ((doc.id_amazon ?? []).some(x => /^B/i.test(x))) return 2;      // Kindle B-code
-    const isbn13 = (doc.isbn ?? []).find(x => x.length === 13 && x.startsWith('978')) ?? '';
-    if ((doc.id_amazon ?? []).some(x => /^\d{9}[\dX]$/i.test(x)) || isbn13) return 1; // ISBN-10
-    return 0;
-  }
   items.sort((a, b) => amzScore(b) - amzScore(a));
 
   if (!items.length) {
@@ -1021,23 +1023,27 @@ async function searchGoodreads(title, author, container) {
 
 function renderSearchResults(items, container) {
   container.innerHTML = items.map((doc, i) => {
-    let auth, thumb, titleText, hasId = true;
+    let auth, thumb, titleText, hasId = false, amzLabel = 'AMZ';
     if (doc._source === 'gb') {
       const info = doc.volumeInfo ?? {};
       auth      = (info.authors ?? []).join(', ');
       thumb     = info.imageLinks?.thumbnail?.replace('http:', 'https:') ?? '';
       titleText = info.title ?? '';
+      hasId     = true;
+    } else if (doc._source === 'ol') {
+      auth      = (doc.author_name ?? []).join(', ');
+      thumb     = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
+      titleText = doc.title ?? '';
+      hasId     = true;
     } else {
-      // ol, amz, gr — all OL-shaped data
+      // amz, gr — OL-shaped data with source-specific ID checks
       auth      = (doc.author_name ?? []).join(', ');
       thumb     = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
       titleText = doc.title ?? '';
       if (doc._source === 'amz') {
-        const hasBcode  = (doc.id_amazon ?? []).some(x => /^B/i.test(x));
-        const hasIsbn10 = (doc.id_amazon ?? []).some(x => /^\d{9}[\dX]$/i.test(x));
-        const isbn13    = (doc.isbn ?? []).find(x => x.length === 13 && x.startsWith('978')) ?? '';
-        hasId = hasBcode || hasIsbn10 || !!isbn13;
-        doc._amzLabel = hasBcode ? 'AMZ ✓' : hasId ? 'AMZ' : 'AMZ';
+        const score = amzScore(doc);
+        hasId       = score > 0;
+        amzLabel    = score === 2 ? 'AMZ ✓' : 'AMZ';
       }
       if (doc._source === 'gr')  hasId = (doc.id_goodreads ?? []).length > 0;
     }
@@ -1047,8 +1053,8 @@ function renderSearchResults(items, container) {
     const badges = {
       ol:  ['badge-ol',  'OL'],
       gb:  ['badge-gb',  'GB'],
-      amz: ['badge-amz', doc._amzLabel ?? 'AMZ'],
-      gr:  ['badge-gr',  hasId ? 'GR ✓'  : 'GR'],
+      amz: ['badge-amz', amzLabel],
+      gr:  ['badge-gr',  hasId ? 'GR ✓' : 'GR'],
     };
     const [badgeClass, badgeLabel] = badges[doc._source] ?? ['badge-ol', '?'];
     const dimClass = (!hasId && (doc._source === 'amz' || doc._source === 'gr')) ? ' no-id' : '';
@@ -1065,7 +1071,7 @@ function renderSearchResults(items, container) {
 }
 
 function applySearchResult(i) {
-  const items = JSON.parse(document.getElementById('gb-results').dataset.results ?? '[]');
+  const items = JSON.parse(document.getElementById('search-results').dataset.results ?? '[]');
   const doc = items[i];
   if (!doc) return;
 
@@ -1074,95 +1080,93 @@ function applySearchResult(i) {
   else if (doc._source === 'amz') applyAmazonResult(doc);
   else if (doc._source === 'gr')  applyGoodreadsResult(doc);
 
-  document.getElementById('gb-results').classList.remove('visible');
+  document.getElementById('search-results').classList.remove('visible');
   updateBookLinksFromForm();
 }
 
+// ── Search result field extractors ────────────────────────────────────────────
+
+function extractOLFields(doc) {
+  return {
+    title:  doc.title ?? '',
+    author: (doc.author_name ?? []).join(', '),
+    pages:  doc.number_of_pages_median ?? '',
+    isbn13: (doc.isbn ?? []).find(x => x.length === 13) ?? (doc.isbn ?? [])[0] ?? '',
+    olKey:  (doc.key ?? '').replace('/works/', ''),
+    thumb:  doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '',
+  };
+}
+
+function extractGBFields(doc) {
+  const info = doc.volumeInfo ?? {};
+  const ids  = info.industryIdentifiers ?? [];
+  return {
+    title:  info.title ?? '',
+    author: (info.authors ?? []).join(', '),
+    pages:  info.pageCount ?? '',
+    isbn13: ids.find(x => x.type === 'ISBN_13')?.identifier ?? ids[0]?.identifier ?? '',
+    olKey:  '',
+    thumb:  info.imageLinks?.thumbnail?.replace('http:', 'https:').replace('zoom=1', 'zoom=2') ?? '',
+    desc:   info.description?.replace(/<[^>]+>/g, '') ?? '',
+    gbId:   doc.id ?? '',
+  };
+}
+
+/**
+ * Write extracted fields into the book form.
+ * Always writes title/author. Only writes other fields when they have a value.
+ * Never overwrites cover or description if the form already has one.
+ */
+function applyFieldsToForm({ title, author, pages, isbn13, olKey, thumb, desc, gbId, amazonId, goodreadsUrl }) {
+  const set = (id, val) => { if (val !== '' && val != null) document.getElementById(id).value = val; };
+  set('f-title',  title);
+  set('f-author', author);
+  set('f-pages',  pages);
+  set('f-isbn',   isbn13);
+  set('f-olid',   olKey);
+  if (gbId)         set('f-gbid',  gbId);
+  if (amazonId)     set('f-amzid', amazonId);
+  if (goodreadsUrl) set('f-grurl', goodreadsUrl);
+  if (thumb && !document.getElementById('f-cover').value)
+    document.getElementById('f-cover').value = thumb;
+  if (desc && !document.getElementById('f-desc').value)
+    document.getElementById('f-desc').value = desc.substring(0, 300);
+  updateCoverPreview();
+}
+
 function applyOLResult(doc) {
-  const thumb  = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
-  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13) ?? (doc.isbn ?? [])[0] ?? '';
-  const olKey  = (doc.key ?? '').replace('/works/', '');
+  const fields = extractOLFields(doc);
   const desc   = typeof doc.first_sentence === 'object'
     ? (doc.first_sentence?.value ?? '') : (doc.first_sentence ?? '');
-
-  document.getElementById('f-title').value  = doc.title ?? '';
-  document.getElementById('f-author').value = (doc.author_name ?? []).join(', ');
-  document.getElementById('f-pages').value  = doc.number_of_pages_median ?? '';
-  document.getElementById('f-isbn').value   = isbn13;
-  document.getElementById('f-olid').value   = olKey;    // OpenLibrary Work ID → proper field
-  if (!document.getElementById('f-cover').value) document.getElementById('f-cover').value = thumb;
-  if (!document.getElementById('f-desc').value)  document.getElementById('f-desc').value  = desc.substring(0, 300);
-
-  updateCoverPreview();
+  applyFieldsToForm({ ...fields, desc });
   toast('Applied metadata from OpenLibrary.');
 }
 
 function applyGBResult(doc) {
-  const info   = doc.volumeInfo ?? {};
-  const ids    = doc.industryIdentifiers ?? info.industryIdentifiers ?? [];
-  const isbn13 = ids.find(x => x.type === 'ISBN_13')?.identifier ?? ids[0]?.identifier ?? '';
-  const thumb  = info.imageLinks?.thumbnail?.replace('http:', 'https:').replace('zoom=1', 'zoom=2') ?? '';
-  const desc   = info.description?.replace(/<[^>]+>/g, '') ?? '';
-
-  document.getElementById('f-title').value  = info.title  ?? '';
-  document.getElementById('f-author').value = (info.authors ?? []).join(', ');
-  document.getElementById('f-pages').value  = info.pageCount ?? '';
-  document.getElementById('f-isbn').value   = isbn13;
-  document.getElementById('f-gbid').value   = doc.id ?? '';   // Google Books volume ID
-  if (!document.getElementById('f-cover').value) document.getElementById('f-cover').value = thumb;
-  if (!document.getElementById('f-desc').value)  document.getElementById('f-desc').value  = desc.substring(0, 300);
-
-  updateCoverPreview();
+  applyFieldsToForm(extractGBFields(doc));
   toast('Applied metadata from Google Books.');
 }
 
 function applyAmazonResult(doc) {
-  const thumb      = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
-  const isbn13     = (doc.isbn ?? []).find(x => x.length === 13) ?? (doc.isbn ?? [])[0] ?? '';
-  const olKey      = (doc.key ?? '').replace('/works/', '');
-
-  // Priority order for ASIN:
-  //  1. Kindle B-code from OL's id_amazon (e.g. B008PE3UH8)
-  //  2. Numeric ISBN-10 from OL's id_amazon (valid physical ASIN)
-  //  3. ISBN-10 derived mathematically from the book's ISBN-13
-  const bCode      = (doc.id_amazon ?? []).find(x => /^B/i.test(x)) ?? '';
-  const isbn10raw  = (doc.id_amazon ?? []).find(x => /^\d{9}[\dX]$/i.test(x)) ?? '';
-  const isbn10calc = isbn13ToIsbn10(isbn13);
-  const asin = bCode || isbn10raw || isbn10calc;
-
-  document.getElementById('f-title').value  = doc.title ?? '';
-  document.getElementById('f-author').value = (doc.author_name ?? []).join(', ');
-  if (doc.number_of_pages_median) document.getElementById('f-pages').value = doc.number_of_pages_median;
-  if (isbn13) document.getElementById('f-isbn').value  = isbn13;
-  if (olKey)  document.getElementById('f-olid').value  = olKey;
-  if (asin)   document.getElementById('f-amzid').value = asin;
-  if (!document.getElementById('f-cover').value && thumb) document.getElementById('f-cover').value = thumb;
-
-  updateCoverPreview();
+  const fields    = extractOLFields(doc);
+  // Priority: Kindle B-code → ISBN-10 from OL → ISBN-10 derived from ISBN-13
+  const bCode     = (doc.id_amazon ?? []).find(x => /^B/i.test(x)) ?? '';
+  const isbn10raw = (doc.id_amazon ?? []).find(x => /^\d{9}[\dX]$/i.test(x)) ?? '';
+  const isbn10    = bCode || isbn10raw || isbn13ToIsbn10(fields.isbn13);
+  applyFieldsToForm({ ...fields, amazonId: isbn10 });
   const msg = bCode      ? `Applied + Kindle ASIN ${bCode}.`
-            : isbn10raw  ? `Applied + physical ASIN ${isbn10raw} (from ISBN-10).`
-            : isbn10calc ? `Applied + physical ASIN ${isbn10calc} (derived from ISBN-13).`
+            : isbn10raw  ? `Applied + physical ASIN ${isbn10raw} (ISBN-10).`
+            : isbn10     ? `Applied + physical ASIN ${isbn10} (derived from ISBN-13).`
             : 'Applied metadata — no Amazon ID found for this edition.';
   toast(msg);
 }
 
 function applyGoodreadsResult(doc) {
-  const thumb  = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
-  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13) ?? (doc.isbn ?? [])[0] ?? '';
-  const olKey  = (doc.key ?? '').replace('/works/', '');
+  const fields = extractOLFields(doc);
   const grId   = (doc.id_goodreads ?? [])[0] ?? '';
   const grUrl  = grId ? `https://www.goodreads.com/book/show/${grId}` : '';
-
-  document.getElementById('f-title').value  = doc.title ?? '';
-  document.getElementById('f-author').value = (doc.author_name ?? []).join(', ');
-  if (doc.number_of_pages_median) document.getElementById('f-pages').value = doc.number_of_pages_median;
-  if (isbn13) document.getElementById('f-isbn').value  = isbn13;
-  if (olKey)  document.getElementById('f-olid').value  = olKey;
-  if (grUrl)  document.getElementById('f-grurl').value = grUrl;
-  if (!document.getElementById('f-cover').value && thumb) document.getElementById('f-cover').value = thumb;
-
-  updateCoverPreview();
-  toast(grUrl ? 'Applied metadata + Goodreads URL.' : 'Applied metadata (no Goodreads ID found for this edition).');
+  applyFieldsToForm({ ...fields, goodreadsUrl: grUrl });
+  toast(grUrl ? 'Applied metadata + Goodreads URL.' : 'Applied metadata (no Goodreads ID found).');
 }
 
 // ── Link badges ───────────────────────────────────────────────────────────────
@@ -1197,10 +1201,10 @@ function updateBookLinksFromValues({ openLibraryId, googleBooksId, amazonId, roy
   const links = [];
 
   if (openLibraryId) {
-    links.push(`<a class="book-link-badge badge-ol2" href="https://openlibrary.org/works/${encodeURIComponent(openLibraryId)}" target="_blank">📖 Open Library</a>`);
+    links.push(`<a class="book-link-badge badge-ol" href="https://openlibrary.org/works/${encodeURIComponent(openLibraryId)}" target="_blank">📖 Open Library</a>`);
   }
   if (googleBooksId) {
-    links.push(`<a class="book-link-badge badge-gb2" href="https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}" target="_blank">📗 Google Books</a>`);
+    links.push(`<a class="book-link-badge badge-gb" href="https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}" target="_blank">📗 Google Books</a>`);
   }
   if (amazonId) {
     links.push(`<a class="book-link-badge badge-amz" href="https://www.amazon.com/dp/${encodeURIComponent(amazonId)}" target="_blank">🛒 Amazon</a>`);
@@ -1363,21 +1367,6 @@ document.getElementById('btn-save-read').addEventListener('click', async () => {
     btn.disabled = false;
   }
 });
-
-// ── Util ─────────────────────────────────────────────────────────────────────
-
-/** Format a book's series + index as "Series Name [N]" or "" if no series. */
-function seriesLabel(book) {
-  if (!book?.series) return '';
-  if (book.seriesIndex == null) return book.series;
-  const n = parseFloat(book.seriesIndex);
-  const idx = isNaN(n) ? '' : (n % 1 === 0 ? String(Math.round(n)) : String(n));
-  return idx ? `${book.series} [${idx}]` : book.series;
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 async function init() {

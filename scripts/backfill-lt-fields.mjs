@@ -52,7 +52,7 @@ function parseTsvLine(line) {
  *   28 Tags
  */
 function parseTsv(filePath) {
-  const raw   = readFileSync(filePath, 'utf8');
+  const raw   = readFileSync(filePath, 'utf8').replace(/^﻿/, ''); // strip BOM
   const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
 
   // Verify header columns

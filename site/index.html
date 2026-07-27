@@ -189,6 +189,7 @@
   <div id="posts-list"><div class="loading">Loading…</div></div>
 </main>
 
+<script src="/js/util.js"></script>
 <script>
 'use strict';
 
@@ -400,16 +401,7 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function seriesLabel(book) {
-  if (!book?.series) return '';
-  if (book.seriesIndex == null) return book.series;
-  const n = parseFloat(book.seriesIndex);
-  const idx = isNaN(n) ? '' : (n % 1 === 0 ? String(Math.round(n)) : String(n));
-  return idx ? `${book.series} [${idx}]` : book.series;
+// esc() and seriesLabel() provided by /js/util.js
 }
 
 function isMemberUser() {

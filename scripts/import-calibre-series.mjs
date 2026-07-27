@@ -272,7 +272,8 @@ async function main() {
 
     const calibreTitle = best.title.trim();
     const seriesName   = best.series.trim();
-    const seriesIndex  = parseFloat(best.series_index) || 1;
+    const _si          = parseFloat(best.series_index);
+    const seriesIndex  = isNaN(_si) ? 1 : _si;  // preserve 0 (valid prequel index)
     const titleChanged = calibreTitle !== book.title;
     const seriesMissing = !book.series;
     const variantNote  = matchedVariant !== book.title ? ` [matched as "${matchedVariant}"]` : '';

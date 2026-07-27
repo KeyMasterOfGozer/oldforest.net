@@ -38,13 +38,14 @@ function now() {
   return new Date().toISOString();
 }
 
-/** Returns true if the JWT claims include editors or admins group */
+/** Returns true if the JWT claims include the editors or admins Cognito group. */
 function isEditor(event) {
   const claims = event.requestContext?.authorizer?.jwt?.claims ?? {};
-  const groups = claims['cognito:groups'] ?? '';
-  // DEBUG — remove after confirming claims shape
-  console.log('DEBUG isEditor claims:', JSON.stringify(claims));
-  console.log('DEBUG groups value:', JSON.stringify(groups), 'type:', typeof groups);
+  const raw    = claims['cognito:groups'] ?? '';
+  // Cognito may return groups as an array or a comma-separated string
+  const groups = Array.isArray(raw)
+    ? raw
+    : raw.split(',').map(g => g.trim()).filter(Boolean);
   return groups.includes('editors') || groups.includes('admins');
 }
 
@@ -177,11 +178,20 @@ async function deleteBook(event) {
 
   const { bookId } = event.pathParameters;
 
-  // Find all reads for this book
-  const readsResult = await dynamo.send(new QueryCommand({
+  // Verify book exists before touching anything
+  const existing = await dynamo.send(new GetCommand({
+    TableName: BOOKS_TABLE,
+    Key: { bookId },
+    ProjectionExpression: 'bookId',
+  }));
+  if (!existing.Item) return err('Book not found', 404);
+
+  // Use Scan (not GSI byBook) — the byBook GSI uses 'finished' as sort key so
+  // in-progress reads without a finished date are excluded from the index.
+  // A scan catches every read for this book regardless of state.
+  const readsResult = await dynamo.send(new ScanCommand({
     TableName: READS_TABLE,
-    IndexName: 'byBook',
-    KeyConditionExpression: 'bookId = :bid',
+    FilterExpression: 'bookId = :bid',
     ExpressionAttributeValues: { ':bid': bookId },
     ProjectionExpression: 'readId',
   }));
