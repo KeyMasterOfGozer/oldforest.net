@@ -54,8 +54,9 @@ export const handler = async () => {
   const timer = setTimeout(() => controller.abort(), 20_000);
 
   try {
-    const url = ltUrl();
-    console.log('Fetching LT URL:', url);
+    const url     = ltUrl();
+    const safeUrl = url.replace(/([?&]key=)[^&]*/g, '$1[REDACTED]');
+    console.log('Fetching LT URL:', safeUrl);
 
     const res = await fetch(url, {
       signal: controller.signal,
@@ -133,7 +134,7 @@ export const handler = async () => {
       statusCode: isTimeout ? 504 : 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        error: isTimeout ? 'LibraryThing API timeout' : err.message,
+        error: isTimeout ? 'LibraryThing API timeout' : 'Internal server error',
       }),
     };
   }

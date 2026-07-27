@@ -8,16 +8,20 @@ const s3 = new S3Client();
 const BUCKET = process.env.CONTENT_BUCKET;
 
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'https://oldforest.net',
   'Content-Type': 'application/json',
 };
 
 function requireAdmin(event) {
-  const groups = event.requestContext?.authorizer?.jwt?.claims?.['cognito:groups'] ?? '';
-  if (!String(groups).includes('admins')) {
-    const err = new Error('Admin access required');
-    err.statusCode = 403;
-    throw err;
+  const claims = event.requestContext?.authorizer?.jwt?.claims ?? {};
+  const raw    = claims['cognito:groups'] ?? '';
+  const groups = Array.isArray(raw)
+    ? raw
+    : raw.split(',').map(g => g.trim()).filter(Boolean);
+  if (!groups.includes('admins')) {
+    const e = new Error('Admin access required');
+    e.statusCode = 403;
+    throw e;
   }
 }
 
@@ -76,6 +80,6 @@ export const handler = async (event) => {
     return err(405, 'Method not allowed');
   } catch (e) {
     console.error('admin-files error:', e);
-    return err(500, e.message || 'Internal server error');
+    return err(500, 'Internal server error');
   }
 };

@@ -304,7 +304,7 @@ resource "aws_lambda_function" "lt_proxy" {
 
   environment {
     variables = {
-      LT_API_KEY = "2025452350"
+      LT_API_KEY = data.aws_ssm_parameter.lt_api_key.value
       LT_USER_ID = "KeyMasterOfGozer"
     }
   }

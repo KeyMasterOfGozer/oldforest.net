@@ -40,11 +40,15 @@ export const handler = async (event) => {
     Bucket: process.env.CONTENT_BUCKET,
     Key: post.contentKey,
   }));
-  post.content = await s3Obj.Body.transformToString();
+  const content = await s3Obj.Body.transformToString();
+
+  // Strip internal fields — authorSub (Cognito UUID) and contentKey (S3 path)
+  // are implementation details that have no place in the public API response.
+  const { authorSub: _sub, contentKey: _key, ...publicPost } = post;
 
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(post),
+    body: JSON.stringify({ ...publicPost, content }),
   };
 };

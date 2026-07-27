@@ -402,7 +402,16 @@ async function deleteRead(event) {
   if (!isEditor(event)) return err('Forbidden', 403);
 
   const { readId } = event.pathParameters;
-  await dynamo.send(new DeleteCommand({ TableName: READS_TABLE, Key: { readId } }));
+  try {
+    await dynamo.send(new DeleteCommand({
+      TableName: READS_TABLE,
+      Key: { readId },
+      ConditionExpression: 'attribute_exists(readId)',
+    }));
+  } catch (e) {
+    if (e.name === 'ConditionalCheckFailedException') return err('Read not found', 404);
+    throw e;
+  }
   return ok({ deleted: readId });
 }
 
@@ -430,7 +439,7 @@ export async function handler(event) {
 
     return err('Not found', 404);
   } catch (e) {
-    console.error(e);
-    return err(`Internal server error: ${e.message}`, 500);
+    console.error('reading-log unhandled error:', e);
+    return err('Internal server error', 500);
   }
 }

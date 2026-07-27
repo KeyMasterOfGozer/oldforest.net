@@ -15,16 +15,20 @@ const USER_POOL_ID = process.env.USER_POOL_ID;
 const MANAGED_GROUPS = ['members', 'editors', 'admins'];
 
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'https://oldforest.net',
   'Content-Type': 'application/json',
 };
 
 function requireAdmin(event) {
-  const groups = event.requestContext?.authorizer?.jwt?.claims?.['cognito:groups'] ?? '';
-  if (!String(groups).includes('admins')) {
-    const err = new Error('Admin access required');
-    err.statusCode = 403;
-    throw err;
+  const claims = event.requestContext?.authorizer?.jwt?.claims ?? {};
+  const raw    = claims['cognito:groups'] ?? '';
+  const groups = Array.isArray(raw)
+    ? raw
+    : raw.split(',').map(g => g.trim()).filter(Boolean);
+  if (!groups.includes('admins')) {
+    const e = new Error('Admin access required');
+    e.statusCode = 403;
+    throw e;
   }
 }
 
@@ -160,10 +164,9 @@ export const handler = async (event) => {
     return errRes(405, 'Method not allowed');
   } catch (e) {
     console.error('admin-users error:', e);
-    const status =
-      e.name === 'UserNotFoundException'    ? 404 :
-      e.name === 'UsernameExistsException'  ? 409 :
-      e.name === 'InvalidParameterException'? 400 : 500;
-    return errRes(status, e.message || 'Internal server error');
+    if (e.name === 'UserNotFoundException')     return errRes(404, 'User not found');
+    if (e.name === 'UsernameExistsException')   return errRes(409, 'User already exists');
+    if (e.name === 'InvalidParameterException') return errRes(400, 'Invalid parameter');
+    return errRes(500, 'Internal server error');
   }
 };

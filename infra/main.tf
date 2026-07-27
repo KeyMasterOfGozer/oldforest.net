@@ -25,5 +25,24 @@ provider "aws" {
   region = var.aws_region
 }
 
+
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+
+# ── SSM Parameter: LibraryThing API key ───────────────────────────────────────
+# The parameter value is managed outside Terraform (set manually after first apply):
+#   aws ssm put-parameter --name /oldforest/lt_api_key \
+#     --value "<key>" --type SecureString --overwrite
+# After rotating the key at LibraryThing, update SSM and redeploy the Lambda.
+resource "aws_ssm_parameter" "lt_api_key" {
+  name  = "/oldforest/lt_api_key"
+  type  = "SecureString"
+  value = "PLACEHOLDER"   # replaced manually — see comment above
+  lifecycle { ignore_changes = [value] }
+}
+
+data "aws_ssm_parameter" "lt_api_key" {
+  name            = "/oldforest/lt_api_key"
+  with_decryption = true
+  depends_on      = [aws_ssm_parameter.lt_api_key]
+}

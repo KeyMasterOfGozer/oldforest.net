@@ -50,11 +50,52 @@ resource "aws_cloudfront_function" "www_redirect" {
   EOT
 }
 
+# ── Security Response Headers Policy ─────────────────────────────────────────
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name = "oldforest-security-headers"
+
+  security_headers_config {
+    # Prevent MIME-type sniffing
+    content_type_options {
+      override = true
+    }
+    # Deny embedding in iframes (clickjacking protection)
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    # Don't send full Referer to cross-origin destinations
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+    # Enforce HTTPS for 1 year, include subdomains
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      override                   = true
+    }
+    # Content Security Policy
+    # - scripts: unsafe-inline required — all page JS is in inline <script> blocks
+    # - styles: unsafe-inline required — all CSS is in inline <style> blocks
+    # - images: self, https (cover art, OG images), data: (inline SVGs)
+    # - connect: self (CloudFront /v1/* proxy) + direct API GW URL used in CFG.apiBase
+    #            + Cognito token endpoint (PKCE code exchange + token refresh)
+    #            + OpenLibrary + Google Books (book search)
+    # - frame-ancestors: none (belt-and-suspenders with X-Frame-Options)
+    content_security_policy {
+      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.execute-api.us-east-1.amazonaws.com https://*.amazoncognito.com https://openlibrary.org https://www.googleapis.com; frame-ancestors 'none';"
+      override                = true
+    }
+  }
+}
+
 # ── CloudFront Distribution ───────────────────────────────────────────────────
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
   aliases             = [var.domain_name, "www.${var.domain_name}"]
   default_root_object = "index.html"
+
   price_class         = "PriceClass_100"
 
   viewer_certificate {
@@ -103,12 +144,11 @@ resource "aws_cloudfront_distribution" "main" {
     path_pattern     = "/images/*"
     target_origin_id = "ContentS3Origin"
 
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-
-    # CachingOptimized managed policy
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    viewer_protocol_policy      = "redirect-to-https"
+    allowed_methods             = ["GET", "HEAD"]
+    cached_methods              = ["GET", "HEAD"]
+    cache_policy_id             = "658327ea-f89d-4fab-a63d-7e88639e58f6"  # CachingOptimized
+    response_headers_policy_id  = aws_cloudfront_response_headers_policy.security.id
   }
 
   # /v1/* → API Gateway (not cached, pass all headers except Host)
@@ -116,26 +156,23 @@ resource "aws_cloudfront_distribution" "main" {
     path_pattern     = "/v1/*"
     target_origin_id = "ApiOrigin"
 
-    viewer_protocol_policy = "https-only"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-    cached_methods         = ["GET", "HEAD"]
-
-    # CachingDisabled managed policy
-    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
-    # AllViewerExceptHostHeader managed origin request policy
-    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+    viewer_protocol_policy      = "https-only"
+    allowed_methods             = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods              = ["GET", "HEAD"]
+    cache_policy_id             = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"  # CachingDisabled
+    origin_request_policy_id    = "b689b0a8-53d0-40ab-baf2-68738e2966ac"  # AllViewerExceptHostHeader
+    response_headers_policy_id  = aws_cloudfront_response_headers_policy.security.id
   }
 
   # Default → site bucket (cached, with www redirect)
   default_cache_behavior {
     target_origin_id = "SiteS3Origin"
 
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-
-    # CachingOptimized managed policy
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    viewer_protocol_policy      = "redirect-to-https"
+    allowed_methods             = ["GET", "HEAD"]
+    cached_methods              = ["GET", "HEAD"]
+    cache_policy_id             = "658327ea-f89d-4fab-a63d-7e88639e58f6"  # CachingOptimized
+    response_headers_policy_id  = aws_cloudfront_response_headers_policy.security.id
 
     function_association {
       event_type   = "viewer-request"

@@ -96,6 +96,7 @@
   <div id="page-content"><div class="loading">Loading…</div></div>
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 'use strict';
@@ -202,7 +203,12 @@ function renderPost(post) {
     ? '<span class="badge-members">Members</span>'
     : '';
 
-  const html = marked.parse(post.content || '');
+  const rawHtml  = marked.parse(post.content || '');
+  const html     = DOMPurify.sanitize(rawHtml, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS:  ['script', 'iframe', 'object', 'embed'],
+    FORBID_ATTR:  ['onerror', 'onload', 'onclick', 'onmouseover'],
+  });
 
   document.getElementById('page-content').innerHTML = `
     <article>

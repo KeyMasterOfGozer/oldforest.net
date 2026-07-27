@@ -23,12 +23,17 @@ export const handler = async (event) => {
   const now = new Date().toISOString();
   const contentKey = `posts/${postId}/body.md`;
 
-  // For personal posts, only the original author can edit
+  // Verify the post exists before doing anything
   const existing = await dynamo.send(new GetCommand({
     TableName: process.env.POSTS_TABLE,
     Key: { postId },
   }));
-  if (existing.Item?.visibility === 'personal' && existing.Item?.authorSub !== claims.sub) {
+  if (!existing.Item) {
+    return { statusCode: 404, body: JSON.stringify({ message: 'Not found' }) };
+  }
+
+  // For personal posts, only the original author can edit
+  if (existing.Item.visibility === 'personal' && existing.Item.authorSub !== claims.sub) {
     return { statusCode: 403, body: JSON.stringify({ message: 'Not your personal post' }) };
   }
 

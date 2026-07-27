@@ -9,13 +9,13 @@ resource "aws_cognito_user_pool" "main" {
     require_uppercase = true
     require_lowercase = true
     require_numbers   = true
-    require_symbols   = false
+    require_symbols   = true
   }
 
   # Enable WebAuthn / passkey support
   web_authn_configuration {
     relying_party_id  = var.domain_name   # "oldforest.net"
-    user_verification = "preferred"       # prompt for passkey but don't require it
+    user_verification = "required"        # biometric/PIN required for passkey sign-in
   }
 }
 
@@ -74,8 +74,8 @@ resource "aws_cognito_user_pool_client" "main" {
     refresh_token = "days"
   }
 
-  access_token_validity  = 24   # 24 hours (Cognito max)
-  id_token_validity      = 24   # keep in sync with access token
+  access_token_validity  = 1    # 1 hour — silent refresh via refresh token
+  id_token_validity      = 1    # keep in sync with access token
   refresh_token_validity = 30   # 30 days (unchanged)
 }
 
