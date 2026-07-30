@@ -290,8 +290,9 @@ function stars(rating) {
 
 function buildPopupHTML(read, book) {
   // Cover
-  const coverHtml = book.coverUrl
-    ? `<img class="ip-cover" src="${esc(book.coverUrl)}" alt="" loading="lazy">`
+  const safeCoverUrl = safeUrl(book.coverUrl);
+  const coverHtml = safeCoverUrl
+    ? `<img class="ip-cover" src="${esc(safeCoverUrl)}" alt="" loading="lazy">`
     : `<div class="ip-cover-ph">📚</div>`;
 
   // Stars + meta
@@ -323,8 +324,9 @@ function buildPopupHTML(read, book) {
   if (book.royalRoadId) {
     exactLinks.push(`<a class="ip-link ip-link-rr" href="https://www.royalroad.com/fiction/${encodeURIComponent(book.royalRoadId)}" target="_blank">Royal Road</a>`);
   }
-  if (book.goodreadsUrl) {
-    exactLinks.push(`<a class="ip-link ip-link-gr" href="${esc(book.goodreadsUrl)}" target="_blank">Goodreads</a>`);
+  const safeGoodreadsUrl = safeUrl(book.goodreadsUrl);
+  if (safeGoodreadsUrl) {
+    exactLinks.push(`<a class="ip-link ip-link-gr" href="${esc(safeGoodreadsUrl)}" target="_blank" rel="noopener">Goodreads</a>`);
   }
 
   const searchLinks = [];
@@ -332,7 +334,7 @@ function buildPopupHTML(read, book) {
     const q = encodeURIComponent((book.title || '') + ' ' + (book.author || ''));
     searchLinks.push(`<a class="ip-link ip-link-search" href="https://books.google.com/books?q=${q}" target="_blank">🔍 Google Books</a>`);
   }
-  if (!book.goodreadsUrl) {
+  if (!safeGoodreadsUrl) {
     const q = encodeURIComponent(book.isbn || ((book.title || '') + ' ' + (book.author || '')));
     searchLinks.push(`<a class="ip-link ip-link-search" href="https://www.goodreads.com/search?q=${q}" target="_blank">🔍 Goodreads</a>`);
   }

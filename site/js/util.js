@@ -21,6 +21,21 @@ function esc(s) {
 }
 
 /**
+ * Validate a stored URL before it's ever placed in an href/src attribute.
+ * Only http:/https: are allowed — blocks javascript:/data:/vbscript: XSS payloads
+ * that would otherwise survive esc()'s HTML-entity escaping untouched.
+ * Returns '' (falsy) for anything unsafe or unparseable.
+ */
+function safeUrl(u) {
+  try {
+    const parsed = new URL(String(u ?? ''), window.location.origin);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Format a book's series + index as "Series Name [N]", or "" if the book has no series.
  * Integer indices are shown without a decimal point (e.g. [8] not [8.0]).
  */

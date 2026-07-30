@@ -2,7 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient());
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
+const CORS = { 'Access-Control-Allow-Origin': 'https://oldforest.net', 'Content-Type': 'application/json' };
 
 export const handler = async () => {
   try {

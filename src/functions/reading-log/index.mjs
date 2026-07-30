@@ -39,6 +39,13 @@ function now() {
   return new Date().toISOString();
 }
 
+/** Rejects javascript:/data: etc. — only http(s) URLs may be stored for goodreadsUrl/coverUrl. */
+function isSafeUrl(u) {
+  if (!u) return true; // optional field
+  try { return ['http:', 'https:'].includes(new URL(u).protocol); }
+  catch { return false; }
+}
+
 /** Returns true if the JWT claims include the editors or admins Cognito group. */
 function isEditor(event) {
   const groups = getGroups(event);
@@ -99,6 +106,8 @@ async function createBook(event) {
   const body = JSON.parse(event.body ?? '{}');
   if (!body.title?.trim()) return err('title is required');
   if (!body.author?.trim()) return err('author is required');
+  if (!isSafeUrl(body.goodreadsUrl)) return err('goodreadsUrl must be a valid http(s) URL');
+  if (!isSafeUrl(body.coverUrl))     return err('coverUrl must be a valid http(s) URL');
 
   const ts = now();
   const item = {
@@ -135,6 +144,8 @@ async function updateBook(event) {
 
   const { bookId } = event.pathParameters;
   const body = JSON.parse(event.body ?? '{}');
+  if (!isSafeUrl(body.goodreadsUrl)) return err('goodreadsUrl must be a valid http(s) URL');
+  if (!isSafeUrl(body.coverUrl))     return err('coverUrl must be a valid http(s) URL');
 
   // All field names are aliased to avoid DynamoDB reserved word conflicts
   // (e.g. title, description, isbn are reserved keywords)

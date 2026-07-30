@@ -17,6 +17,15 @@ resource "aws_cognito_user_pool" "main" {
     relying_party_id  = var.domain_name   # "oldforest.net"
     user_verification = "required"        # biometric/PIN required for passkey sign-in
   }
+
+  # Optional TOTP MFA — a free fallback second factor for users signing in with a
+  # password instead of a passkey. Not enforced: passkey sign-in already provides
+  # phishing-resistant possession+biometric auth for users who enroll one.
+  mfa_configuration = "OPTIONAL"
+
+  software_token_mfa_configuration {
+    enabled = true
+  }
 }
 
 resource "aws_cognito_user_group" "members" {
@@ -78,7 +87,7 @@ resource "aws_cognito_user_pool_client" "main" {
 
   access_token_validity  = 1    # 1 hour — silent refresh via refresh token
   id_token_validity      = 1    # keep in sync with access token
-  refresh_token_validity = 30   # 30 days (unchanged)
+  refresh_token_validity = 7    # 7 days — shrinks the exfiltration window for a stolen refresh token
 }
 
 resource "aws_cognito_user_pool_domain" "main" {

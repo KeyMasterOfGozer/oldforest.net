@@ -151,6 +151,34 @@ resource "aws_cloudfront_distribution" "main" {
     response_headers_policy_id  = aws_cloudfront_response_headers_policy.security.id
   }
 
+  # /v1/proxy/librarything → API Gateway, cached (honors the Lambda's own
+  # Cache-Control: max-age=3600). Listed before the generic /v1/* behavior —
+  # CloudFront matches ordered_cache_behavior blocks in declaration order, most
+  # specific first. Without this, every request bypasses caching entirely and
+  # hits the LibraryThing API directly (SEC-21: abuse/cost amplification).
+  ordered_cache_behavior {
+    path_pattern     = "/v1/proxy/librarything"
+    target_origin_id = "ApiOrigin"
+
+    viewer_protocol_policy      = "https-only"
+    allowed_methods             = ["GET", "HEAD"]
+    cached_methods              = ["GET", "HEAD"]
+    cache_policy_id             = "658327ea-f89d-4fab-a63d-7e88639e58f6"  # CachingOptimized
+    response_headers_policy_id  = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # /v1/feed.xml → API Gateway, cached (honors the Lambda's Cache-Control: max-age=900)
+  ordered_cache_behavior {
+    path_pattern     = "/v1/feed.xml"
+    target_origin_id = "ApiOrigin"
+
+    viewer_protocol_policy      = "https-only"
+    allowed_methods             = ["GET", "HEAD"]
+    cached_methods              = ["GET", "HEAD"]
+    cache_policy_id             = "658327ea-f89d-4fab-a63d-7e88639e58f6"  # CachingOptimized
+    response_headers_policy_id  = aws_cloudfront_response_headers_policy.security.id
+  }
+
   # /v1/* → API Gateway (not cached, pass all headers except Host)
   ordered_cache_behavior {
     path_pattern     = "/v1/*"

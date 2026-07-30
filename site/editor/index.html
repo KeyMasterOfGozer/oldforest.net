@@ -255,6 +255,7 @@
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
+<script src="/js/util.js"></script>
 <script>
 'use strict';
 
@@ -685,10 +686,16 @@ async function handleSave(status) {
 function updateThumbPreview(url) {
   const preview = document.getElementById('thumb-preview');
   if (!preview) return;
-  if (url) {
-    preview.innerHTML = `<img src="${url.replace(/"/g,'')}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<span style=color:var(--muted);font-size:12px>Bad URL</span>'">`;
+  const safe = safeUrl(url);
+  preview.innerHTML = '';
+  if (safe) {
+    const img = document.createElement('img');
+    img.src = safe;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    img.onerror = () => { preview.innerHTML = '<span style="color:var(--muted);font-size:12px">Bad URL</span>'; };
+    preview.appendChild(img);
   } else {
-    preview.innerHTML = '<span style="color:var(--muted);font-size:12px">No image</span>';
+    preview.innerHTML = `<span style="color:var(--muted);font-size:12px">${url ? 'Bad URL' : 'No image'}</span>`;
   }
 }
 

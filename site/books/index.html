@@ -424,8 +424,9 @@ function renderBookGrid(books) {
     const isReading = reads.some(r => r.started && !r.finished);
     const readCount = reads.length;
 
-    const coverHtml = book.coverUrl
-      ? `<img class="book-cover" src="${esc(book.coverUrl)}" alt="" loading="lazy">`
+    const safeCoverUrl = safeUrl(book.coverUrl);
+    const coverHtml = safeCoverUrl
+      ? `<img class="book-cover" src="${esc(safeCoverUrl)}" alt="" loading="lazy">`
       : `<div class="book-cover book-cover-placeholder">📖</div>`;
 
     const readingDot = isReading ? `<div class="reading-dot" title="Currently reading"></div>` : '';

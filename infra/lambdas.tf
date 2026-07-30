@@ -13,20 +13,41 @@ data "archive_file" "get_post" {
 
 data "archive_file" "create_post" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/create-post"
   output_path = "${path.module}/.lambda-zips/create-post.zip"
+  source {
+    content  = file("${path.module}/../src/functions/create-post/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
 }
 
 data "archive_file" "update_post" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/update-post"
   output_path = "${path.module}/.lambda-zips/update-post.zip"
+  source {
+    content  = file("${path.module}/../src/functions/update-post/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
 }
 
 data "archive_file" "delete_post" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/delete-post"
   output_path = "${path.module}/.lambda-zips/delete-post.zip"
+  source {
+    content  = file("${path.module}/../src/functions/delete-post/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
 }
 
 data "archive_file" "profile" {

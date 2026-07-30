@@ -2,14 +2,10 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
+import { requireEditor } from './auth.mjs';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient());
 const s3 = new S3Client();
-
-function requireEditor(event) {
-  const groups = event.requestContext?.authorizer?.jwt?.claims?.['cognito:groups'] ?? [];
-  if (!groups.includes('editors')) throw { statusCode: 403, message: 'Editors only' };
-}
 
 export const handler = async (event) => {
   try {

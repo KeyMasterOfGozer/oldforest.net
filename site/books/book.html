@@ -326,8 +326,9 @@ function renderBook(book) {
   const avgRating = ratings.length ? ratings.reduce((a,b) => a+b,0) / ratings.length : null;
   const isReading = reads.some(r => r.started && !r.finished);
 
-  const coverHtml = book.coverUrl
-    ? `<img class="book-hero-cover" src="${esc(book.coverUrl)}" alt="${esc(book.title)} cover">`
+  const safeCoverUrl = safeUrl(book.coverUrl);
+  const coverHtml = safeCoverUrl
+    ? `<img class="book-hero-cover" src="${esc(safeCoverUrl)}" alt="${esc(book.title)} cover">`
     : `<div class="book-hero-cover-placeholder">📖</div>`;
 
   const seriesHtml = seriesLabel(book)
@@ -356,8 +357,9 @@ function renderBook(book) {
     extLinks.push(`<a class="ext-link ext-link-ol" href="https://openlibrary.org/books/${esc(book.openLibraryId)}" target="_blank" rel="noopener">Open Library</a>`);
   if (book.amazonId)
     extLinks.push(`<a class="ext-link ext-link-amz" href="https://www.amazon.com/dp/${esc(book.amazonId)}" target="_blank" rel="noopener">Amazon</a>`);
-  if (book.goodreadsUrl)
-    extLinks.push(`<a class="ext-link ext-link-gr" href="${esc(book.goodreadsUrl)}" target="_blank" rel="noopener">Goodreads</a>`);
+  const safeGoodreadsUrl = safeUrl(book.goodreadsUrl);
+  if (safeGoodreadsUrl)
+    extLinks.push(`<a class="ext-link ext-link-gr" href="${esc(safeGoodreadsUrl)}" target="_blank" rel="noopener">Goodreads</a>`);
   if (book.royalRoadId)
     extLinks.push(`<a class="ext-link ext-link-rr" href="https://www.royalroad.com/fiction/${esc(book.royalRoadId)}" target="_blank" rel="noopener">Royal Road</a>`);
   const extLinksHtml = extLinks.length ? `<div class="ext-links">${extLinks.join('')}</div>` : '';
