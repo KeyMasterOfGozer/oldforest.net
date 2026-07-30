@@ -37,20 +37,41 @@ data "archive_file" "profile" {
 
 data "archive_file" "upload_url" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/upload-url"
   output_path = "${path.module}/.lambda-zips/upload-url.zip"
+  source {
+    content  = file("${path.module}/../src/functions/upload-url/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
 }
 
 data "archive_file" "admin_files" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/admin-files"
   output_path = "${path.module}/.lambda-zips/admin-files.zip"
+  source {
+    content  = file("${path.module}/../src/functions/admin-files/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
 }
 
 data "archive_file" "admin_users" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/admin-users"
   output_path = "${path.module}/.lambda-zips/admin-users.zip"
+  source {
+    content  = file("${path.module}/../src/functions/admin-users/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
 }
 
 # ── Shared Lambda settings ────────────────────────────────────────────────────
@@ -241,8 +262,15 @@ resource "aws_lambda_function" "list_apps" {
 # ── admin-apps ────────────────────────────────────────────────────────────────
 data "archive_file" "admin_apps" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/admin-apps"
   output_path = "${path.module}/.lambda-zips/admin-apps.zip"
+  source {
+    content  = file("${path.module}/../src/functions/admin-apps/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
 }
 
 resource "aws_lambda_function" "admin_apps" {
@@ -263,8 +291,15 @@ resource "aws_lambda_function" "admin_apps" {
 # ── reading-log ───────────────────────────────────────────────────────────────
 data "archive_file" "reading_log" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/reading-log"
   output_path = "${path.module}/.lambda-zips/reading-log.zip"
+  source {
+    content  = file("${path.module}/../src/functions/reading-log/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/auth.mjs")
+    filename = "auth.mjs"
+  }
 }
 
 resource "aws_lambda_function" "reading_log" {

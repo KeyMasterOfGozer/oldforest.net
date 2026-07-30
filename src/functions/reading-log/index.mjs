@@ -11,6 +11,7 @@ import {
   BatchGetCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
+import { getGroups } from './auth.mjs';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const BOOKS_TABLE = process.env.BOOKS_TABLE;
@@ -40,12 +41,7 @@ function now() {
 
 /** Returns true if the JWT claims include the editors or admins Cognito group. */
 function isEditor(event) {
-  const claims = event.requestContext?.authorizer?.jwt?.claims ?? {};
-  const raw    = claims['cognito:groups'] ?? '';
-  // Cognito may return groups as an array or a comma-separated string
-  const groups = Array.isArray(raw)
-    ? raw
-    : raw.split(',').map(g => g.trim()).filter(Boolean);
+  const groups = getGroups(event);
   return groups.includes('editors') || groups.includes('admins');
 }
 

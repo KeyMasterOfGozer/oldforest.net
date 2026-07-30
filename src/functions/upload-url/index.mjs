@@ -1,6 +1,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
+import { requireEditor } from './auth.mjs';
 
 const s3 = new S3Client();
 
@@ -19,17 +20,6 @@ const MIME_MAP = {
 };
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB soft cap
-
-function requireEditor(event) {
-  const claims = event.requestContext?.authorizer?.jwt?.claims ?? {};
-  const raw    = claims['cognito:groups'] ?? '';
-  const groups = Array.isArray(raw)
-    ? raw
-    : raw.split(',').map(g => g.trim()).filter(Boolean);
-  if (!groups.includes('editors') && !groups.includes('admins')) {
-    throw { statusCode: 403, message: 'Editors only' };
-  }
-}
 
 export const handler = async (event) => {
   try {

@@ -84,7 +84,7 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     #            + OpenLibrary + Google Books (book search)
     # - frame-ancestors: none (belt-and-suspenders with X-Frame-Options)
     content_security_policy {
-      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.execute-api.us-east-1.amazonaws.com https://*.amazoncognito.com https://openlibrary.org https://www.googleapis.com; frame-ancestors 'none';"
+      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' https: data:; connect-src 'self' https://*.execute-api.us-east-1.amazonaws.com https://*.amazoncognito.com https://openlibrary.org https://www.googleapis.com https://*.s3.us-east-1.amazonaws.com; frame-ancestors 'none';"
       override                = true
     }
   }

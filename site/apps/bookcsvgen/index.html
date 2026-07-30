@@ -33,6 +33,12 @@
     .rss-link { display: inline-flex; align-items: center; gap: 5px; font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 600; color: #fff; background: #f26522; border-radius: 4px; padding: 3px 7px; text-decoration: none; transition: opacity .15s; white-space: nowrap; }
     .rss-link:hover { opacity: .85; color: #fff; text-decoration: none; }
 
+    /* ── Section tabs ── */
+    .section-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .section-tab { padding: 8px 20px; font-size: 14px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; text-decoration: none; font-family: -apple-system, sans-serif; }
+    .section-tab:hover { color: var(--text); text-decoration: none; }
+    .section-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
     /* ── Main ── */
     main { max-width: 960px; margin: 0 auto; padding: 28px 24px 60px; }
     h1 { font-size: 26px; color: var(--accent); margin-bottom: 6px; font-family: Georgia, serif; }
@@ -51,14 +57,16 @@
     #loading { padding: 60px; text-align: center; color: var(--muted); }
     #error   { padding: 40px; text-align: center; color: #c05848; }
 
-    /* ── Section layout ── */
-    .sections { display: grid; grid-template-columns: 300px 1fr; gap: 32px; align-items: start; }
-    @media (max-width: 720px) { .sections { grid-template-columns: 1fr; } }
-
-    .section-title {
-      font-size: 16px; font-weight: 600; color: var(--accent); margin-bottom: 14px;
-      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    /* ── Content tabs (inner page tabs, smaller than section-tabs) ── */
+    .content-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .content-tab {
+      padding: 6px 18px; font-size: 13px; font-weight: 500; color: var(--muted);
+      background: none; border: none; cursor: pointer; font-family: -apple-system, sans-serif;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color .15s, border-color .15s;
     }
+    .content-tab:hover { color: var(--text); }
+    .content-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
     /* ── Tables ── */
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -74,17 +82,20 @@
     .num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
     .yr  { font-weight: 600; }
 
+    /* Stats table — limit width so it doesn't sprawl on wide screens */
+    #panel-stats table { max-width: 520px; }
+
     /* Readings table */
-    #readings-section { overflow: auto; max-height: 70vh; }
+    #readings-section { overflow: auto; max-height: 72vh; }
     #readings-section table { min-width: 580px; }
-    .book-title  { font-weight: 500; max-width: 220px; }
+    .book-title  { font-weight: 500; max-width: 280px; }
     .book-author { color: var(--muted); font-size: 13px; }
 
     /* ── Toolbar ── */
     .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
     .toolbar input[type="search"] {
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      color: var(--text); font-size: 13px; padding: 6px 12px; outline: none; width: 220px;
+      color: var(--text); font-size: 13px; padding: 6px 12px; outline: none; width: 240px;
     }
     .toolbar input[type="search"]:focus { border-color: var(--accent); }
     .toolbar input[type="search"]::placeholder { color: var(--muted); }
@@ -98,57 +109,65 @@
     <nav class="header-nav">
       <a href="/v1/feed.xml" class="rss-link" title="RSS Feed"><svg width="11" height="11" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><circle cx="1" cy="7" r="1"/><path d="M0 4q4 0 4 4h1.5Q5.5 2.5 0 2.5z"/><path d="M0 1Q7 1 7 8h1.5Q8.5-.5 0-.5z"/></svg> RSS</a>
       <a href="/" class="nav-link">Blog</a>
+      <a href="/books/" class="nav-link">Books</a>
       <a href="/apps.html" class="nav-link">Apps</a>
     </nav>
   </div>
 </header>
 
 <main>
+  <div class="section-tabs">
+    <a href="/books/" class="section-tab">Books</a>
+    <a href="/apps/booktimeline/" class="section-tab">Timeline</a>
+    <a href="/apps/bookcsvgen/" class="section-tab active">Stats &amp; CSV</a>
+  </div>
+
   <h1>📊 Book Stats &amp; CSV</h1>
   <p class="subtitle">Reading history — yearly stats and downloadable CSV.</p>
 
   <div id="loading">Loading reading history…</div>
   <div id="error"   style="display:none"></div>
   <div id="content" style="display:none">
-    <div class="sections">
-      <!-- Yearly stats (left column) -->
-      <div>
-        <div class="section-title">Yearly Stats</div>
-        <table id="stats-table">
+    <div class="content-tabs">
+      <button class="content-tab active" data-panel="stats">Yearly Stats</button>
+      <button class="content-tab"        data-panel="readings">All Readings</button>
+    </div>
+
+    <!-- Panel: Yearly Stats -->
+    <div id="panel-stats" class="tab-panel">
+      <table id="stats-table">
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th class="num">Books</th>
+            <th class="num">Avg days</th>
+            <th class="num">Total pages</th>
+            <th class="num">Avg pages</th>
+          </tr>
+        </thead>
+        <tbody id="stats-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Panel: All Readings -->
+    <div id="panel-readings" class="tab-panel" style="display:none">
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Search title or author…">
+        <button class="btn" id="btn-download">⬇ Download CSV</button>
+      </div>
+      <div id="readings-section">
+        <table>
           <thead>
             <tr>
-              <th>Year</th>
-              <th class="num">Books</th>
-              <th class="num">Avg days</th>
-              <th class="num">Total pages</th>
-              <th class="num">Avg pages</th>
+              <th>Title</th>
+              <th>Author</th>
+              <th>Started</th>
+              <th>Finished</th>
+              <th class="num">Days</th>
             </tr>
           </thead>
-          <tbody id="stats-tbody"></tbody>
+          <tbody id="readings-tbody"></tbody>
         </table>
-      </div>
-
-      <!-- All readings (right column) -->
-      <div>
-        <div class="toolbar">
-          <div class="section-title" style="margin:0;flex:1">All Reading Dates</div>
-          <input type="search" id="search" placeholder="Search title or author…">
-          <button class="btn" id="btn-download">⬇ Download CSV</button>
-        </div>
-        <div id="readings-section">
-          <table>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Author</th>
-                <th>Started</th>
-                <th>Finished</th>
-                <th class="num">Days</th>
-              </tr>
-            </thead>
-            <tbody id="readings-tbody"></tbody>
-          </table>
-        </div>
       </div>
     </div>
   </div>
@@ -290,6 +309,18 @@ async function init() {
 
     document.getElementById('loading').style.display = 'none';
     document.getElementById('content').style.display = 'block';
+
+    // Inner content tabs
+    document.querySelectorAll('.content-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.content-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const panelId = 'panel-' + tab.dataset.panel;
+        document.querySelectorAll('.tab-panel').forEach(p => {
+          p.style.display = p.id === panelId ? 'block' : 'none';
+        });
+      });
+    });
 
     document.getElementById('btn-download').addEventListener('click', downloadCsv);
 

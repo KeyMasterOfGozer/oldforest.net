@@ -40,6 +40,12 @@
     .rss-link { display: inline-flex; align-items: center; gap: 5px; font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 600; color: #fff; background: #f26522; border-radius: 4px; padding: 3px 7px; text-decoration: none; transition: opacity .15s; white-space: nowrap; }
     .rss-link:hover { opacity: .85; color: #fff; text-decoration: none; }
 
+    /* ── Section tabs ── */
+    .section-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .section-tab { padding: 8px 20px; font-size: 14px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; text-decoration: none; font-family: -apple-system, sans-serif; }
+    .section-tab:hover { color: var(--text); text-decoration: none; }
+    .section-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
     /* ── Main ── */
     main { max-width: 1200px; margin: 0 auto; padding: 28px 24px 40px; }
 
@@ -62,7 +68,11 @@
       border-radius: var(--radius);
       overflow: hidden;
       min-height: 300px;
+      background: var(--surface);
     }
+    /* Cap vis-timeline's auto-calculated height so it never overflows
+       #timeline-wrap's 298px content area (300px box - 2px border). */
+    #timeline { max-height: 295px; overflow: hidden; }
 
     /* Waterfall: hide the empty left group-label panel */
     .vis-panel.vis-left { width: 0 !important; min-width: 0 !important;
@@ -191,12 +201,19 @@
     <nav class="header-nav">
       <a href="/v1/feed.xml" class="rss-link" title="RSS Feed"><svg width="11" height="11" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><circle cx="1" cy="7" r="1"/><path d="M0 4q4 0 4 4h1.5Q5.5 2.5 0 2.5z"/><path d="M0 1Q7 1 7 8h1.5Q8.5-.5 0-.5z"/></svg> RSS</a>
       <a href="/" class="nav-link">Blog</a>
+      <a href="/books/" class="nav-link">Books</a>
       <a href="/apps.html" class="nav-link">Apps</a>
     </nav>
   </div>
 </header>
 
 <main>
+  <div class="section-tabs">
+    <a href="/books/" class="section-tab">Books</a>
+    <a href="/apps/booktimeline/" class="section-tab active">Timeline</a>
+    <a href="/apps/bookcsvgen/" class="section-tab">Stats &amp; CSV</a>
+  </div>
+
   <h1>📚 Book Timeline</h1>
   <p class="subtitle">Books read over the years. Drag to scroll, scroll to zoom.</p>
 
@@ -363,13 +380,19 @@ function buildItems(reads) {
     });
   }
   // Sort chronologically so waterfall rows flow oldest→newest top→bottom
-  items.sort((a, b) => a.start - b.start);
+  // Sort newest→oldest so the most recent reads claim the lowest lane IDs
+  // (lanes 0, 1, 2 …). Lane 0 renders at the top of the waterfall, so recent
+  // reads are always visible near the top of the default 6-month window even
+  // when most other lanes are empty.
+  items.sort((a, b) => b.start - a.start);
   // Round-robin across fixed lanes; _group is immutable — filter re-packing
   // only changes 'group', leaving _group intact for the scrubber minimap.
   items.forEach((it, i) => {
     it.group  = i % WATERFALL_ROWS;
     it._group = it.group;   // freeze original assignment for scrubber
   });
+  // Restore chronological order (oldest→newest) for display.
+  items.sort((a, b) => a.start - b.start);
   return items;
 }
 
@@ -435,8 +458,10 @@ function drawScrubber() {
   // Viewport indicator — spans full content height
   if (mainTimeline) {
     const win = mainTimeline.getWindow();
-    const vx1 = tx(win.start.getTime());
-    const vx2 = tx(win.end.getTime());
+    // Clamp to canvas bounds: the window may extend past scrubMin/scrubMax
+    // (e.g. winEnd is 1 month in the future but scrubMax is today).
+    const vx1 = Math.max(0, tx(win.start.getTime()));
+    const vx2 = Math.min(W, tx(win.end.getTime()));
     const vw  = Math.max(4, vx2 - vx1);
     ctx.fillStyle   = 'rgba(120,168,78,0.15)';
     ctx.fillRect(vx1, 0, vw, contentH);
@@ -518,7 +543,6 @@ async function init() {
 
     allItems      = buildItems(data.reads);
     dataset       = new vis.DataSet(allItems);
-    // Fixed group rows — always exactly WATERFALL_ROWS, never rebuilt
     groupsDataset = new vis.DataSet(
       Array.from({ length: WATERFALL_ROWS }, (_, i) => ({ id: i, content: '' }))
     );
@@ -527,26 +551,22 @@ async function init() {
     scrubMin = Math.min(...allItems.map(it => it.start.getTime()));
     scrubMax = Math.max(...allItems.map(it => it.end.getTime()));
 
-    // ── Default window: last 18 months ──
-    const finishedDates = allItems
-      .filter(it => it._class !== 'current')
-      .map(it => it.end.getTime());
-    const latestMs = finishedDates.length ? Math.max(...finishedDates) : Date.now();
-    const latest   = new Date(latestMs + 30  * 24 * 3600 * 1000);  // +1 month padding
-    const earliest = new Date(latestMs - 180 * 24 * 3600 * 1000);  // −6 months
-
     // ── Main timeline ──
+    // Default window: last 6 months → 1 month ahead.
+    const winEnd   = new Date(Date.now() + 30  * 24 * 3600 * 1000);
+    const winStart = new Date(Date.now() - 180 * 24 * 3600 * 1000);
+
     const mainOptions = {
-      start:  earliest,
-      end:    latest,
-      orientation:     { axis: 'top' },
-      stack:           false,   // waterfall: no packing within a lane
+      start:       winStart,
+      end:         winEnd,
+      orientation: { axis: 'top' },
+      stack:       false,   // waterfall: no packing within a lane
       selectable:  true,
       moveable:    true,
       zoomable:    true,
-      zoomMin: 1000 * 60 * 60 * 24 * 14,       // min zoom: 2 weeks
-      zoomMax: 1000 * 60 * 60 * 24 * 365 * 5,  // max zoom: 5 years
-      tooltip:  { delay: 99999999 },            // suppress vis-timeline's own tooltip
+      zoomMin: 1000 * 60 * 60 * 24 * 14,        // min zoom: 2 weeks
+      zoomMax: 1000 * 60 * 60 * 24 * 365 * 30,  // max zoom: 30 years (full reading history)
+      tooltip:  { delay: 99999999 },             // suppress vis-timeline's own tooltip
       margin:   { item: { horizontal: 2, vertical: 1 } },
     };
 
@@ -560,6 +580,14 @@ async function init() {
       groupsDataset,
       mainOptions,
     );
+
+    // Force a redraw after the browser has settled the layout.
+    // vis-timeline measures container dimensions at construction; the 100ms
+    // delay lets CSS min-height take effect before the first render pass.
+    setTimeout(() => {
+      mainTimeline.redraw();
+      drawScrubber();
+    }, 100);
 
     // Redraw scrubber whenever main window changes
     mainTimeline.on('rangechange',  drawScrubber);

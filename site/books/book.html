@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book — Old Forest</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1a0b;
+      --surface:  #162414;
+      --surface2: #1d2e1a;
+      --border:   #2a3e20;
+      --text:     #e8d8b0;
+      --muted:    #859e6a;
+      --accent:   #78a84e;
+      --accent2:  #96c860;
+      --danger:   #c04040;
+      --radius:   8px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent2); }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; position: sticky; top: 0; z-index: 100; }
+    .header-inner { display: flex; align-items: center; height: 56px; }
+    .site-title { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; font-family: Georgia, serif; white-space: nowrap; text-decoration: none; margin-right: 20px; }
+    .header-nav { display: flex; align-items: center; gap: 14px; flex: 1; }
+    .header-auth { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+    #user-name { color: var(--muted); font-size: 13px; }
+    .nav-link { font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
+    .nav-link:hover { color: var(--accent); }
+
+    /* ── Buttons ── */
+    button, .btn { cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; border: none; border-radius: var(--radius); padding: 7px 16px; transition: opacity .15s; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+    button:hover, .btn:hover { opacity: .85; text-decoration: none; }
+    .btn-primary  { background: var(--accent); color: #0d1a0b; }
+    .btn-outline  { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .btn-danger   { background: var(--danger); color: #fff; }
+    .btn-sm       { padding: 4px 10px; font-size: 12px; }
+
+    /* ── Editor-only elements ── */
+    .editor-only { display: none; }
+
+    /* ── Main ── */
+    main { max-width: 820px; margin: 0 auto; padding: 32px 24px 60px; }
+
+    /* ── Back + section tabs ── */
+    .back-nav { margin-bottom: 20px; }
+    .back-link { font-size: 13px; color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .back-link:hover { color: var(--accent); }
+
+    .section-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+    .section-tab { padding: 8px 20px; font-size: 14px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; text-decoration: none; }
+    .section-tab:hover { color: var(--text); }
+    .section-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Book hero ── */
+    .book-hero { display: flex; gap: 28px; margin-bottom: 32px; }
+    .book-hero-cover-wrap { flex-shrink: 0; }
+    .book-hero-cover { width: 120px; height: 180px; object-fit: cover; border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,.5); display: block; }
+    .book-hero-cover-placeholder { width: 120px; height: 180px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 52px; }
+    .book-hero-info { flex: 1; min-width: 0; }
+    .book-hero-series  { font-size: 14px; color: var(--accent); font-style: italic; margin-bottom: 6px; }
+    .book-hero-title   { font-size: 26px; font-weight: 700; color: var(--text); font-family: Georgia, serif; line-height: 1.25; margin-bottom: 8px; }
+    .book-hero-author  { font-size: 16px; color: var(--muted); margin-bottom: 12px; }
+    .book-hero-rating  { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .star-rating { color: var(--accent); font-size: 18px; letter-spacing: 2px; }
+    .rating-detail { font-size: 13px; color: var(--muted); }
+    .book-hero-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+    .book-tag { background: rgba(120,168,78,.12); border: 1px solid rgba(120,168,78,.25); color: var(--accent); border-radius: 10px; padding: 2px 10px; font-size: 12px; }
+    .reading-badge { background: rgba(150,200,96,.15); color: var(--accent2); border: 1px solid rgba(150,200,96,.3); border-radius: 10px; padding: 3px 10px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+
+    /* ── External links ── */
+    .ext-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .ext-link { padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; transition: opacity .15s; display: inline-flex; align-items: center; gap: 6px; }
+    .ext-link:hover { opacity: .85; text-decoration: none; }
+    .ext-link-gb  { background: #4285f4; color: #fff; }
+    .ext-link-ol  { background: #2c2c2c; color: #e0e0e0; border: 1px solid #555; }
+    .ext-link-amz { background: #ff9900; color: #111; }
+    .ext-link-gr  { background: #f4f1ea; color: #372213; }
+    .ext-link-rr  { background: #3a1060; color: #d0aaff; }
+
+    /* ── Description ── */
+    .book-description { color: var(--muted); font-size: 14px; line-height: 1.65; margin-bottom: 32px; border-top: 1px solid var(--border); padding-top: 20px; }
+
+    /* ── Section header ── */
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-top: 1px solid var(--border); padding-top: 24px; }
+    .section-header h2 { font-size: 18px; color: var(--accent); font-family: Georgia, serif; }
+    .section-header-actions { display: flex; gap: 8px; }
+
+    /* ── Read cards ── */
+    .reads-list { display: flex; flex-direction: column; gap: 12px; }
+    .read-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+    .read-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .read-card-dates  { font-size: 13px; color: var(--muted); }
+    .read-card-format { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .read-card-stars  { color: var(--accent); font-size: 15px; letter-spacing: 1px; flex-shrink: 0; }
+    .read-card-review { font-size: 14px; color: var(--text); line-height: 1.6; margin-top: 6px; font-family: Georgia, serif; }
+    .read-card-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .empty-reads { color: var(--muted); font-size: 14px; padding: 24px 0; text-align: center; }
+
+    /* ── Inline forms ── */
+    .form-panel { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; display: none; }
+    .form-panel.open { display: block; }
+    .form-panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: var(--accent); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-grid .span2 { grid-column: 1 / -1; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    input[type="text"], input[type="date"], input[type="url"], input[type="number"], select, textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); font-size: 13px; padding: 8px 10px; outline: none; font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; }
+
+    /* Star picker */
+    .star-picker { display: flex; gap: 4px; }
+    .star-picker span { font-size: 20px; cursor: pointer; color: var(--border); transition: color .1s; user-select: none; }
+    .star-picker span.on { color: var(--accent); }
+    .star-picker span:hover { color: var(--accent2); }
+
+    .form-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+    /* ── Book edit form ── */
+    .book-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .book-edit-grid .span2 { grid-column: 1 / -1; }
+
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 20px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 999; white-space: nowrap; }
+    #toast.show { opacity: 1; }
+    #toast.error { border-color: var(--danger); color: var(--danger); }
+
+    /* ── Loading / error ── */
+    .page-message { text-align: center; color: var(--muted); padding: 80px 0; font-size: 16px; }
+
+    @media (max-width: 600px) {
+      main { padding: 20px 16px 40px; }
+      .book-hero { flex-direction: column; gap: 20px; }
+      .book-hero-cover, .book-hero-cover-placeholder { width: 90px; height: 135px; }
+      .book-hero-title { font-size: 22px; }
+      .form-grid, .book-edit-grid { grid-template-columns: 1fr; }
+      .form-grid .span2, .book-edit-grid .span2 { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="site-title" href="/">Old Forest</a>
+    <nav class="header-nav">
+      <a class="nav-link" href="/">Blog</a>
+      <a class="nav-link" href="/apps.html">Apps</a>
+    </nav>
+    <div class="header-auth">
+      <span id="user-name"></span>
+      <button id="btn-signin"  class="btn-outline btn-sm" onclick="login()">Sign In</button>
+      <button id="btn-signout" class="btn-outline btn-sm" onclick="logout()" style="display:none">Sign Out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="back-nav">
+    <a href="/books/" class="back-link">← All Books</a>
+  </div>
+
+  <div class="section-tabs">
+    <a href="/books/" class="section-tab active">Books</a>
+    <a href="/apps/booktimeline/" class="section-tab">Timeline</a>
+    <a href="/apps/bookcsvgen/" class="section-tab">Stats &amp; CSV</a>
+  </div>
+
+  <div id="page-content">
+    <p class="page-message">Loading…</p>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="/js/util.js"></script>
+<script>
+'use strict';
+
+const CFG = {
+  cognitoDomain: 'auth-165395066552.auth.us-east-1.amazoncognito.com',
+  clientId:      '71fv32ot0raceh7mt5lqgjvbto',
+  redirectUri:   'https://oldforest.net/books/',
+  apiBase:       'https://aijo86kijl.execute-api.us-east-1.amazonaws.com',
+};
+
+let accessToken  = null;
+let isEditorUser = false;
+let currentBook  = null;
+let editingReadId = null;   // null = new, string = editing existing
+let editReadRating = 0;
+let editBookRating = 0;     // unused but reserved
+
+// ── PKCE ─────────────────────────────────────────────────────────────────────
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function generatePKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+async function login() {
+  const { verifier, challenge } = await generatePKCE();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  // After auth, land on the books list (then navigate back to this book)
+  const p = new URLSearchParams({
+    response_type: 'code', client_id: CFG.clientId,
+    redirect_uri: CFG.redirectUri,
+    scope: 'openid email profile aws.cognito.signin.user.admin',
+    code_challenge_method: 'S256', code_challenge: challenge,
+  });
+  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
+}
+function logout() {
+  accessToken = null;
+  sessionStorage.clear();
+  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
+  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
+}
+function parseJWT(token) {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+  catch { return {}; }
+}
+function tokenExpiresInMs() {
+  if (!accessToken) return 0;
+  const claims = parseJWT(accessToken);
+  return claims.exp ? (claims.exp * 1000) - Date.now() : 0;
+}
+async function maybeRefreshToken() {
+  if (tokenExpiresInMs() > 60_000) return;
+  const refresh = sessionStorage.getItem('refresh_token');
+  if (!refresh) return;
+  try {
+    const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token', client_id: CFG.clientId, refresh_token: refresh,
+      }),
+    });
+    if (!res.ok) throw new Error();
+    const tokens = await res.json();
+    accessToken = tokens.access_token;
+    sessionStorage.setItem('access_token', tokens.access_token);
+  } catch {
+    accessToken = null;
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('refresh_token');
+  }
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function applyAuthState() {
+  if (!accessToken) return;
+  const claims = parseJWT(accessToken);
+  const raw    = claims['cognito:groups'] ?? '';
+  const groups = Array.isArray(raw) ? raw : raw.split(',').map(g => g.trim()).filter(Boolean);
+  isEditorUser = groups.includes('editors') || groups.includes('admins');
+
+  const name = claims.name || claims.email || '';
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('btn-signin').style.display  = 'none';
+  document.getElementById('btn-signout').style.display = '';
+
+  if (isEditorUser) {
+    document.querySelectorAll('.editor-only').forEach(el => el.style.display = '');
+  }
+}
+
+function authHeader() {
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  await maybeRefreshToken();
+  const opts = { method, headers: { 'Content-Type': 'application/json', ...authHeader() } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(CFG.apiBase + path, opts);
+  if (!res.ok) { const t = await res.text(); throw new Error(`${res.status}: ${t}`); }
+  return res.json();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isErr ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+// ── Stars helper ──────────────────────────────────────────────────────────────
+function starsHtml(n) {
+  if (!n) return '';
+  const r = Math.round(n);
+  return '★'.repeat(r) + '☆'.repeat(5 - r);
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderBook(book) {
+  currentBook = book;
+  document.title = `${book.title} — Old Forest`;
+
+  const reads   = book.reads ?? [];
+  const ratings = reads.map(r => r.rating).filter(Boolean);
+  const avgRating = ratings.length ? ratings.reduce((a,b) => a+b,0) / ratings.length : null;
+  const isReading = reads.some(r => r.started && !r.finished);
+
+  const coverHtml = book.coverUrl
+    ? `<img class="book-hero-cover" src="${esc(book.coverUrl)}" alt="${esc(book.title)} cover">`
+    : `<div class="book-hero-cover-placeholder">📖</div>`;
+
+  const seriesHtml = seriesLabel(book)
+    ? `<div class="book-hero-series">${esc(seriesLabel(book))}</div>`
+    : '';
+
+  const readingBadge = isReading
+    ? `<div class="reading-badge">📖 Currently Reading</div>`
+    : '';
+
+  const ratingHtml = avgRating ? `
+    <div class="book-hero-rating">
+      <span class="star-rating">${starsHtml(avgRating)}</span>
+      <span class="rating-detail">${avgRating.toFixed(1)} avg · ${ratings.length} rating${ratings.length !== 1 ? 's' : ''}</span>
+    </div>` : '';
+
+  const tagsHtml = (book.tags ?? []).length
+    ? `<div class="book-hero-tags">${book.tags.map(t => `<span class="book-tag">${esc(t)}</span>`).join('')}</div>`
+    : '';
+
+  // External links
+  const extLinks = [];
+  if (book.googleBooksId)
+    extLinks.push(`<a class="ext-link ext-link-gb" href="https://books.google.com/books?id=${esc(book.googleBooksId)}" target="_blank" rel="noopener">Google Books</a>`);
+  if (book.openLibraryId)
+    extLinks.push(`<a class="ext-link ext-link-ol" href="https://openlibrary.org/books/${esc(book.openLibraryId)}" target="_blank" rel="noopener">Open Library</a>`);
+  if (book.amazonId)
+    extLinks.push(`<a class="ext-link ext-link-amz" href="https://www.amazon.com/dp/${esc(book.amazonId)}" target="_blank" rel="noopener">Amazon</a>`);
+  if (book.goodreadsUrl)
+    extLinks.push(`<a class="ext-link ext-link-gr" href="${esc(book.goodreadsUrl)}" target="_blank" rel="noopener">Goodreads</a>`);
+  if (book.royalRoadId)
+    extLinks.push(`<a class="ext-link ext-link-rr" href="https://www.royalroad.com/fiction/${esc(book.royalRoadId)}" target="_blank" rel="noopener">Royal Road</a>`);
+  const extLinksHtml = extLinks.length ? `<div class="ext-links">${extLinks.join('')}</div>` : '';
+
+  const descHtml = book.description
+    ? `<div class="book-description">${esc(book.description)}</div>` : '';
+
+  // Reads section
+  const readsHtml = reads.length
+    ? reads.map(r => renderReadCard(r)).join('')
+    : `<p class="empty-reads">No reads logged yet.</p>`;
+
+  document.getElementById('page-content').innerHTML = `
+    <div class="book-hero">
+      <div class="book-hero-cover-wrap">${coverHtml}</div>
+      <div class="book-hero-info">
+        ${seriesHtml}
+        <h1 class="book-hero-title">${esc(book.title)}</h1>
+        <div class="book-hero-author">by ${esc(book.author)}</div>
+        ${readingBadge}
+        ${ratingHtml}
+        ${tagsHtml}
+        ${extLinksHtml}
+        <div class="section-header-actions editor-only" style="display:none; gap:8px; flex-wrap:wrap; margin-top:4px">
+          <button class="btn btn-outline btn-sm" onclick="openBookEditForm()">✏️ Edit Book</button>
+        </div>
+      </div>
+    </div>
+
+    ${descHtml}
+
+    <!-- Book edit form (editor only) -->
+    <div id="book-edit-form" class="form-panel">
+      <h3>Edit Book</h3>
+      <div class="book-edit-grid">
+        <div class="span2"><label>Title</label><input type="text" id="ef-title"></div>
+        <div><label>Author</label><input type="text" id="ef-author"></div>
+        <div><label>Series</label><input type="text" id="ef-series"></div>
+        <div><label>Series Index</label><input type="number" id="ef-series-index" step="0.1" min="0"></div>
+        <div><label>Cover URL</label><input type="url" id="ef-cover"></div>
+        <div><label>Google Books ID</label><input type="text" id="ef-gb-id"></div>
+        <div><label>Open Library ID</label><input type="text" id="ef-ol-id"></div>
+        <div><label>Amazon ASIN</label><input type="text" id="ef-amz-id"></div>
+        <div><label>Goodreads URL</label><input type="url" id="ef-gr-url"></div>
+        <div><label>Royal Road ID</label><input type="text" id="ef-rr-id"></div>
+        <div class="span2"><label>Tags (comma-separated)</label><input type="text" id="ef-tags"></div>
+        <div class="span2"><label>Description</label><textarea id="ef-description" rows="4"></textarea></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveBook()">Save Book</button>
+        <button class="btn btn-outline" onclick="closeBookEditForm()">Cancel</button>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <h2>Reads (${reads.length})</h2>
+      <div class="section-header-actions">
+        <button class="btn btn-primary btn-sm editor-only" style="display:none" onclick="openReadForm(null)">+ Log a Read</button>
+      </div>
+    </div>
+
+    <!-- Log / edit read form (editor only) -->
+    <div id="read-form" class="form-panel">
+      <h3 id="read-form-title">Log a Read</h3>
+      <div class="form-grid">
+        <div><label>Started</label><input type="date" id="rf-started"></div>
+        <div><label>Finished</label><input type="date" id="rf-finished"></div>
+        <div><label>Format</label>
+          <select id="rf-format">
+            <option value="">— select —</option>
+            <option>Hardcover</option>
+            <option>Paperback</option>
+            <option>eBook</option>
+            <option>Audiobook</option>
+            <option>Online / Web Serial</option>
+            <option>Library</option>
+          </select>
+        </div>
+        <div>
+          <label>Rating</label>
+          <div class="star-picker" id="rf-stars">
+            <span data-v="1">★</span>
+            <span data-v="2">★</span>
+            <span data-v="3">★</span>
+            <span data-v="4">★</span>
+            <span data-v="5">★</span>
+          </div>
+        </div>
+        <div class="span2"><label>Review <small style="color:var(--muted)">(shown publicly)</small></label><textarea id="rf-review" rows="3"></textarea></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="btn-save-read" onclick="saveRead()">Save</button>
+        <button class="btn btn-outline" onclick="closeReadForm()">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="btn-delete-read" onclick="deleteRead()" style="display:none; margin-left:auto">Delete</button>
+      </div>
+    </div>
+
+    <div class="reads-list" id="reads-list">${readsHtml}</div>
+  `;
+
+  // Apply editor controls visibility after rendering
+  if (isEditorUser) {
+    document.querySelectorAll('.editor-only').forEach(el => el.style.display = '');
+  }
+
+  // Wire up star picker
+  initStarPicker();
+}
+
+function renderReadCard(r) {
+  const dateParts = [];
+  if (r.started)  dateParts.push(`Started ${formatDate(r.started)}`);
+  if (r.finished) dateParts.push(`Finished ${formatDate(r.finished)}`);
+  const datesStr = dateParts.join(' · ') || 'Dates not recorded';
+
+  const starsStr = r.rating ? starsHtml(r.rating) : '';
+  const reviewHtml = r.review
+    ? `<div class="read-card-review">"${esc(r.review)}"</div>`
+    : '';
+
+  const editorActions = isEditorUser ? `
+    <div class="read-card-actions editor-only">
+      <button class="btn btn-outline btn-sm" onclick="openReadForm('${esc(r.readId)}')">Edit</button>
+    </div>` : '';
+
+  return `
+    <div class="read-card" data-read-id="${esc(r.readId)}">
+      <div class="read-card-header">
+        <div>
+          <div class="read-card-dates">${datesStr}</div>
+          ${r.format ? `<div class="read-card-format">${esc(r.format)}</div>` : ''}
+        </div>
+        ${starsStr ? `<div class="read-card-stars">${starsStr}</div>` : ''}
+      </div>
+      ${reviewHtml}
+      ${editorActions}
+    </div>`;
+}
+
+// ── Book edit form ─────────────────────────────────────────────────────────────
+function openBookEditForm() {
+  const b = currentBook;
+  document.getElementById('ef-title').value        = b.title        ?? '';
+  document.getElementById('ef-author').value       = b.author       ?? '';
+  document.getElementById('ef-series').value       = b.series       ?? '';
+  document.getElementById('ef-series-index').value = b.seriesIndex  ?? '';
+  document.getElementById('ef-cover').value        = b.coverUrl     ?? '';
+  document.getElementById('ef-gb-id').value        = b.googleBooksId ?? '';
+  document.getElementById('ef-ol-id').value        = b.openLibraryId ?? '';
+  document.getElementById('ef-amz-id').value       = b.amazonId     ?? '';
+  document.getElementById('ef-gr-url').value       = b.goodreadsUrl ?? '';
+  document.getElementById('ef-rr-id').value        = b.royalRoadId  ?? '';
+  document.getElementById('ef-tags').value         = (b.tags ?? []).join(', ');
+  document.getElementById('ef-description').value  = b.description  ?? '';
+  document.getElementById('book-edit-form').classList.add('open');
+  document.getElementById('book-edit-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function closeBookEditForm() {
+  document.getElementById('book-edit-form').classList.remove('open');
+}
+
+async function saveBook() {
+  const body = {
+    title:         document.getElementById('ef-title').value.trim(),
+    author:        document.getElementById('ef-author').value.trim(),
+    series:        document.getElementById('ef-series').value.trim()       || null,
+    seriesIndex:   document.getElementById('ef-series-index').value.trim() || null,
+    coverUrl:      document.getElementById('ef-cover').value.trim()        || null,
+    googleBooksId: document.getElementById('ef-gb-id').value.trim()        || null,
+    openLibraryId: document.getElementById('ef-ol-id').value.trim()        || null,
+    amazonId:      document.getElementById('ef-amz-id').value.trim()       || null,
+    goodreadsUrl:  document.getElementById('ef-gr-url').value.trim()       || null,
+    royalRoadId:   document.getElementById('ef-rr-id').value.trim()        || null,
+    tags:          document.getElementById('ef-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+    description:   document.getElementById('ef-description').value.trim()  || null,
+  };
+  if (!body.title || !body.author) { toast('Title and author are required.', true); return; }
+
+  try {
+    const result = await api('PUT', `/v1/reading/books/${currentBook.bookId}`, body);
+    toast('Book saved.');
+    closeBookEditForm();
+    // Reload to show updated info
+    await loadBook(currentBook.bookId);
+  } catch (e) {
+    toast('Save failed: ' + e.message, true);
+  }
+}
+
+// ── Read form ─────────────────────────────────────────────────────────────────
+function initStarPicker() {
+  editReadRating = 0;
+  const stars = document.querySelectorAll('#rf-stars span');
+  stars.forEach(s => {
+    s.addEventListener('click', () => {
+      const v = parseInt(s.dataset.v);
+      editReadRating = editReadRating === v ? 0 : v;
+      updateStarPicker(stars, editReadRating);
+    });
+    s.addEventListener('mouseenter', () => {
+      updateStarPicker(stars, parseInt(s.dataset.v));
+    });
+  });
+  document.getElementById('rf-stars').addEventListener('mouseleave', () => {
+    updateStarPicker(stars, editReadRating);
+  });
+}
+function updateStarPicker(stars, val) {
+  stars.forEach(s => s.classList.toggle('on', parseInt(s.dataset.v) <= val));
+}
+
+function openReadForm(readId) {
+  editingReadId = readId;
+  const form = document.getElementById('read-form');
+  form.classList.add('open');
+
+  if (readId) {
+    document.getElementById('read-form-title').textContent = 'Edit Read';
+    document.getElementById('btn-delete-read').style.display = '';
+    const read = (currentBook.reads ?? []).find(r => r.readId === readId);
+    if (read) {
+      document.getElementById('rf-started').value  = read.started  ?? '';
+      document.getElementById('rf-finished').value = read.finished ?? '';
+      document.getElementById('rf-format').value   = read.format   ?? '';
+      document.getElementById('rf-review').value   = read.review   ?? '';
+      editReadRating = read.rating ?? 0;
+      updateStarPicker(document.querySelectorAll('#rf-stars span'), editReadRating);
+    }
+  } else {
+    document.getElementById('read-form-title').textContent = 'Log a Read';
+    document.getElementById('btn-delete-read').style.display = 'none';
+    document.getElementById('rf-started').value  = '';
+    document.getElementById('rf-finished').value = '';
+    document.getElementById('rf-format').value   = '';
+    document.getElementById('rf-review').value   = '';
+    editReadRating = 0;
+    updateStarPicker(document.querySelectorAll('#rf-stars span'), 0);
+  }
+
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function closeReadForm() {
+  document.getElementById('read-form').classList.remove('open');
+  editingReadId = null;
+}
+
+async function saveRead() {
+  const body = {
+    bookId:   currentBook.bookId,
+    started:  document.getElementById('rf-started').value  || null,
+    finished: document.getElementById('rf-finished').value || null,
+    format:   document.getElementById('rf-format').value   || null,
+    rating:   editReadRating || null,
+    review:   document.getElementById('rf-review').value.trim() || null,
+  };
+
+  try {
+    if (editingReadId) {
+      await api('PUT', `/v1/reading/reads/${editingReadId}`, body);
+    } else {
+      await api('POST', '/v1/reading/reads', body);
+    }
+    toast('Read saved.');
+    closeReadForm();
+    await loadBook(currentBook.bookId);
+  } catch (e) {
+    toast('Save failed: ' + e.message, true);
+  }
+}
+
+async function deleteRead() {
+  if (!editingReadId) return;
+  if (!confirm('Delete this read entry?')) return;
+  try {
+    await api('DELETE', `/v1/reading/reads/${editingReadId}`);
+    toast('Read deleted.');
+    closeReadForm();
+    await loadBook(currentBook.bookId);
+  } catch (e) {
+    toast('Delete failed: ' + e.message, true);
+  }
+}
+
+// ── Load book ─────────────────────────────────────────────────────────────────
+async function loadBook(bookId) {
+  try {
+    const result = await fetch(CFG.apiBase + `/v1/reading/books/${bookId}`);
+    if (!result.ok) {
+      if (result.status === 404) {
+        document.getElementById('page-content').innerHTML =
+          '<p class="page-message">Book not found. <a href="/books/">← Back to Books</a></p>';
+      } else {
+        throw new Error(result.status);
+      }
+      return;
+    }
+    const { book } = await result.json();
+    renderBook(book);
+  } catch (e) {
+    document.getElementById('page-content').innerHTML =
+      `<p class="page-message">Failed to load book. <a href="/books/">← Back to Books</a></p>`;
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  // Check for existing session
+  accessToken = sessionStorage.getItem('access_token');
+  if (accessToken) {
+    await maybeRefreshToken();
+    applyAuthState();
+  }
+
+  // Get book ID from query string
+  const params = new URLSearchParams(window.location.search);
+  const bookId = params.get('id');
+  if (!bookId) {
+    document.getElementById('page-content').innerHTML =
+      '<p class="page-message">No book specified. <a href="/books/">← Back to Books</a></p>';
+    return;
+  }
+
+  await loadBook(bookId);
+}
+
+init();
+</script>
+</body>
+</html>

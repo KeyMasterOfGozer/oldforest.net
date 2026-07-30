@@ -1,22 +1,10 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, PutCommand, UpdateCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
+import { requireAdmin } from './auth.mjs';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient());
 const CORS = { 'Access-Control-Allow-Origin': 'https://oldforest.net', 'Content-Type': 'application/json' };
-
-function requireAdmin(event) {
-  const claims = event.requestContext?.authorizer?.jwt?.claims ?? {};
-  const raw    = claims['cognito:groups'] ?? '';
-  const groups = Array.isArray(raw)
-    ? raw
-    : raw.split(',').map(g => g.trim()).filter(Boolean);
-  if (!groups.includes('admins')) {
-    const e = new Error('Admin access required');
-    e.statusCode = 403;
-    throw e;
-  }
-}
 
 function ok(body)            { return { statusCode: 200, headers: CORS, body: JSON.stringify(body) }; }
 function created(body)       { return { statusCode: 201, headers: CORS, body: JSON.stringify(body) }; }
@@ -25,7 +13,7 @@ function fail(status, msg)   { return { statusCode: status, headers: CORS, body:
 
 export const handler = async (event) => {
   try { requireAdmin(event); }
-  catch (e) { return fail(e.statusCode || 403, e.message); }
+  catch (e) { return fail(e.statusCode ?? 403, e.message ?? 'Forbidden'); }
 
   const method  = event.requestContext?.http?.method;
   const appId   = event.pathParameters?.appId;

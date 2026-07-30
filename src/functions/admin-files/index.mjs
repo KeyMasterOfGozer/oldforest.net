@@ -3,6 +3,7 @@ import {
   ListObjectsV2Command,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { requireAdmin } from './auth.mjs';
 
 const s3 = new S3Client();
 const BUCKET = process.env.CONTENT_BUCKET;
@@ -11,19 +12,6 @@ const CORS = {
   'Access-Control-Allow-Origin': 'https://oldforest.net',
   'Content-Type': 'application/json',
 };
-
-function requireAdmin(event) {
-  const claims = event.requestContext?.authorizer?.jwt?.claims ?? {};
-  const raw    = claims['cognito:groups'] ?? '';
-  const groups = Array.isArray(raw)
-    ? raw
-    : raw.split(',').map(g => g.trim()).filter(Boolean);
-  if (!groups.includes('admins')) {
-    const e = new Error('Admin access required');
-    e.statusCode = 403;
-    throw e;
-  }
-}
 
 function ok(body) {
   return { statusCode: 200, headers: CORS, body: JSON.stringify(body) };
@@ -34,7 +22,7 @@ function err(status, message) {
 
 export const handler = async (event) => {
   try { requireAdmin(event); }
-  catch (e) { return err(e.statusCode || 403, e.message); }
+  catch (e) { return err(e.statusCode ?? 403, e.message ?? 'Forbidden'); }
 
   const method = event.requestContext?.http?.method;
 

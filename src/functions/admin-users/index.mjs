@@ -8,6 +8,7 @@ import {
   AdminRemoveUserFromGroupCommand,
   AdminListGroupsForUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
+import { requireAdmin } from './auth.mjs';
 
 const cognito = new CognitoIdentityProviderClient();
 const USER_POOL_ID = process.env.USER_POOL_ID;
@@ -18,19 +19,6 @@ const CORS = {
   'Access-Control-Allow-Origin': 'https://oldforest.net',
   'Content-Type': 'application/json',
 };
-
-function requireAdmin(event) {
-  const claims = event.requestContext?.authorizer?.jwt?.claims ?? {};
-  const raw    = claims['cognito:groups'] ?? '';
-  const groups = Array.isArray(raw)
-    ? raw
-    : raw.split(',').map(g => g.trim()).filter(Boolean);
-  if (!groups.includes('admins')) {
-    const e = new Error('Admin access required');
-    e.statusCode = 403;
-    throw e;
-  }
-}
 
 function ok(body, status = 200) {
   return { statusCode: status, headers: CORS, body: JSON.stringify(body) };
@@ -49,7 +37,7 @@ async function getUserGroups(username) {
 
 export const handler = async (event) => {
   try { requireAdmin(event); }
-  catch (e) { return errRes(e.statusCode || 403, e.message); }
+  catch (e) { return errRes(e.statusCode ?? 403, e.message ?? 'Forbidden'); }
 
   const method   = event.requestContext?.http?.method;
   const username = event.pathParameters?.username

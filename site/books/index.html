@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Books — Old Forest</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1a0b;
+      --surface:  #162414;
+      --surface2: #1d2e1a;
+      --border:   #2a3e20;
+      --text:     #e8d8b0;
+      --muted:    #859e6a;
+      --accent:   #78a84e;
+      --accent2:  #96c860;
+      --danger:   #c04040;
+      --radius:   8px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent2); }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; position: sticky; top: 0; z-index: 100; }
+    .header-inner { display: flex; align-items: center; height: 56px; gap: 0; }
+    .site-title { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -.3px; font-family: Georgia, serif; white-space: nowrap; text-decoration: none; margin-right: 20px; }
+    .header-nav { display: flex; align-items: center; gap: 14px; flex: 1; }
+    .header-auth { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+    #user-name { color: var(--muted); font-size: 13px; }
+    .nav-link { font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s; }
+    .nav-link:hover { color: var(--accent); }
+
+    /* ── Buttons ── */
+    button, .btn { cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; border: none; border-radius: var(--radius); padding: 7px 16px; transition: opacity .15s; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+    button:hover, .btn:hover { opacity: .85; text-decoration: none; }
+    .btn-primary  { background: var(--accent); color: #0d1a0b; }
+    .btn-outline  { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .btn-sm       { padding: 4px 10px; font-size: 12px; }
+
+    /* ── Editor-only elements: hidden until isEditor confirmed ── */
+    .editor-only { display: none; }
+
+    /* ── Main ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 24px 60px; }
+
+    /* ── Page header ── */
+    .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+    .page-header h1 { font-size: 28px; color: var(--accent); font-family: Georgia, serif; }
+    .page-subtitle  { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+    /* ── Section tabs (Books / Timeline) ── */
+    .section-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+    .section-tab { padding: 8px 20px; font-size: 14px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; text-decoration: none; }
+    .section-tab:hover { color: var(--text); }
+    .section-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Controls row ── */
+    .controls-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    #search-input { flex: 1; min-width: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px; padding: 8px 12px; outline: none; font-family: inherit; }
+    #search-input:focus { border-color: var(--accent); }
+    #search-input::placeholder { color: var(--muted); }
+    #sort-field { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px; padding: 8px 10px; outline: none; cursor: pointer; }
+    #sort-field:focus { border-color: var(--accent); }
+    #sort-dir-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted); font-size: 12px; padding: 8px 10px; cursor: pointer; }
+    #sort-dir-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Tag filter bar ── */
+    #tag-filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; min-height: 0; }
+    #tag-filter-bar:empty { display: none; margin-bottom: 0; }
+    .tag-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--muted); transition: background .1s, color .1s, border-color .1s; }
+    .tag-pill:hover { border-color: var(--accent); color: var(--text); }
+    .tag-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .tag-expand-btn { background: var(--surface2); border: 1px dashed var(--border); border-radius: 12px; padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--muted); font-style: italic; }
+    .tag-expand-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Books grid ── */
+    #books-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+    .empty-state { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; font-size: 15px; }
+
+    /* ── Book card ── */
+    .book-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; gap: 14px; cursor: pointer; transition: border-color .15s; text-decoration: none; color: inherit; }
+    .book-card:hover { border-color: var(--accent); text-decoration: none; color: inherit; }
+
+    .book-cover-wrap { position: relative; flex-shrink: 0; width: 56px; height: 80px; }
+    .book-cover { width: 56px; height: 80px; object-fit: cover; border-radius: 3px; display: block; }
+    .book-cover-placeholder { width: 56px; height: 80px; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+    .reading-dot { position: absolute; top: -4px; right: -4px; width: 12px; height: 12px; background: var(--accent2); border-radius: 50%; border: 2px solid var(--bg); }
+
+    .book-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .book-series-label { font-size: 11px; color: var(--accent); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .book-title-text  { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.3; }
+    .book-author-text { font-size: 13px; color: var(--muted); }
+
+    .book-meta-row { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+    .star-rating { color: var(--accent); font-size: 12px; letter-spacing: 1px; }
+    .read-count  { font-size: 12px; color: var(--muted); }
+    .reading-label { font-size: 11px; font-weight: 600; color: var(--accent2); background: rgba(150,200,96,.15); border-radius: 10px; padding: 1px 7px; }
+
+    .book-tags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .book-tag { background: rgba(120,168,78,.12); border: 1px solid rgba(120,168,78,.25); color: var(--accent); border-radius: 10px; padding: 1px 8px; font-size: 11px; }
+
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 20px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 999; white-space: nowrap; }
+    #toast.show { opacity: 1; }
+    #toast.error { border-color: var(--danger); color: var(--danger); }
+
+    @media (max-width: 600px) {
+      main { padding: 20px 16px 40px; }
+      #books-grid { grid-template-columns: 1fr; }
+      .page-header { flex-direction: column; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="site-title" href="/">Old Forest</a>
+    <nav class="header-nav">
+      <a class="nav-link" href="/">Blog</a>
+      <a class="nav-link" href="/apps.html">Apps</a>
+    </nav>
+    <div class="header-auth">
+      <span id="user-name"></span>
+      <button id="btn-signin"  class="btn-outline btn-sm" onclick="login()">Sign In</button>
+      <button id="btn-signout" class="btn-outline btn-sm" onclick="logout()" style="display:none">Sign Out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="page-header">
+    <div>
+      <h1>📚 Books</h1>
+      <p class="page-subtitle" id="books-stats">Loading…</p>
+    </div>
+    <div>
+      <a id="btn-add-book" href="/apps/reading-log/" class="btn btn-primary editor-only" style="display:none">+ Add Book</a>
+    </div>
+  </div>
+
+  <div class="section-tabs">
+    <a href="/books/" class="section-tab active">Books</a>
+    <a href="/apps/booktimeline/" class="section-tab">Timeline</a>
+    <a href="/apps/bookcsvgen/" class="section-tab">Stats &amp; CSV</a>
+  </div>
+
+  <div class="controls-row">
+    <input id="search-input" type="search" placeholder="Search by title or author…" oninput="applyFilter()">
+    <select id="sort-field" onchange="onSortChange()">
+      <option value="series">Sort: Series</option>
+      <option value="title">Sort: Title</option>
+      <option value="author">Sort: Author</option>
+    </select>
+    <button id="sort-dir-btn" onclick="onSortDirToggle()">↑ Asc</button>
+  </div>
+
+  <div id="tag-filter-bar"></div>
+
+  <div id="books-grid">
+    <p class="empty-state">Loading…</p>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="/js/util.js"></script>
+<script>
+'use strict';
+
+const CFG = {
+  cognitoDomain: 'auth-165395066552.auth.us-east-1.amazoncognito.com',
+  clientId:      '71fv32ot0raceh7mt5lqgjvbto',
+  redirectUri:   'https://oldforest.net/books/',
+  apiBase:       'https://aijo86kijl.execute-api.us-east-1.amazonaws.com',
+};
+
+let accessToken = null;
+let isEditorUser = false;
+
+// State
+let allBooks = [];
+let bookReadsMap = {};   // bookId → [{readId, rating, started, finished, ...}]
+let activeTagFilter = null;
+let tagBarExpanded  = false;
+let sortField = 'series';
+let sortDir   = 'asc';
+
+// ── PKCE ─────────────────────────────────────────────────────────────────────
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function generatePKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+async function login() {
+  const { verifier, challenge } = await generatePKCE();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  const p = new URLSearchParams({
+    response_type: 'code', client_id: CFG.clientId,
+    redirect_uri: CFG.redirectUri,
+    scope: 'openid email profile aws.cognito.signin.user.admin',
+    code_challenge_method: 'S256', code_challenge: challenge,
+  });
+  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
+}
+function logout() {
+  accessToken = null;
+  sessionStorage.clear();
+  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
+  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
+}
+async function exchangeCode(code) {
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code', client_id: CFG.clientId,
+      redirect_uri: CFG.redirectUri, code, code_verifier: verifier,
+    }),
+  });
+  if (!res.ok) throw new Error('Token exchange failed');
+  return res.json();
+}
+function parseJWT(token) {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+  catch { return {}; }
+}
+function tokenExpiresInMs() {
+  if (!accessToken) return 0;
+  const claims = parseJWT(accessToken);
+  return claims.exp ? (claims.exp * 1000) - Date.now() : 0;
+}
+async function maybeRefreshToken() {
+  if (tokenExpiresInMs() > 60_000) return;
+  const refresh = sessionStorage.getItem('refresh_token');
+  if (!refresh) return;
+  try {
+    const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token', client_id: CFG.clientId, refresh_token: refresh,
+      }),
+    });
+    if (!res.ok) throw new Error('refresh failed');
+    const tokens = await res.json();
+    accessToken = tokens.access_token;
+    sessionStorage.setItem('access_token', tokens.access_token);
+  } catch {
+    accessToken = null;
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('refresh_token');
+  }
+}
+
+// ── Auth setup ────────────────────────────────────────────────────────────────
+function applyAuthState() {
+  if (!accessToken) return;
+  const claims = parseJWT(accessToken);
+  const raw    = claims['cognito:groups'] ?? '';
+  const groups = Array.isArray(raw) ? raw : raw.split(',').map(g => g.trim()).filter(Boolean);
+  isEditorUser = groups.includes('editors') || groups.includes('admins');
+
+  const name = claims.name || claims.email || '';
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('btn-signin').style.display  = 'none';
+  document.getElementById('btn-signout').style.display = '';
+
+  if (isEditorUser) {
+    document.getElementById('btn-add-book').style.display = '';
+  }
+}
+
+// ── Data fetching ─────────────────────────────────────────────────────────────
+async function fetchJSON(path) {
+  const res = await fetch(CFG.apiBase + path);
+  if (!res.ok) throw new Error(`${res.status} ${path}`);
+  return res.json();
+}
+
+async function loadData() {
+  const [booksResult, readsResult] = await Promise.allSettled([
+    fetchJSON('/v1/reading/books'),
+    fetchJSON('/v1/reading/reads'),
+  ]);
+
+  if (booksResult.status === 'fulfilled') {
+    allBooks = booksResult.value.books ?? [];
+  } else {
+    document.getElementById('books-grid').innerHTML =
+      '<p class="empty-state">Failed to load books. Please try again later.</p>';
+    return;
+  }
+
+  // Build bookId → reads[] map
+  bookReadsMap = {};
+  if (readsResult.status === 'fulfilled') {
+    for (const read of readsResult.value.reads ?? []) {
+      if (!bookReadsMap[read.bookId]) bookReadsMap[read.bookId] = [];
+      bookReadsMap[read.bookId].push(read);
+    }
+  }
+
+  renderTagFilterBar();
+  applyFilter();
+}
+
+// ── Tag filter bar ────────────────────────────────────────────────────────────
+const PINNED_TAGS = ['to read', 'current'];
+const MAX_VISIBLE  = 14;
+
+function renderTagFilterBar() {
+  const bar = document.getElementById('tag-filter-bar');
+  const allTags  = [...new Set(allBooks.flatMap(b => b.tags ?? []))];
+  const pinned   = PINNED_TAGS.filter(t => allTags.includes(t));
+  const rest     = allTags.filter(t => !PINNED_TAGS.includes(t)).sort();
+  const sorted   = [...pinned, ...rest];
+
+  const limit  = tagBarExpanded ? sorted.length : MAX_VISIBLE;
+  const visible = sorted.slice(0, limit);
+  const hidden  = sorted.length - visible.length;
+
+  bar.innerHTML = visible.map(tag => {
+    const active = tag === activeTagFilter ? ' active' : '';
+    return `<button class="tag-pill${active}" onclick="toggleTagFilter('${esc(tag)}')">${esc(tag)}</button>`;
+  }).join('');
+
+  if (!tagBarExpanded && hidden > 0) {
+    bar.innerHTML += `<button class="tag-expand-btn" onclick="expandTags()">+${hidden} more</button>`;
+  } else if (tagBarExpanded && sorted.length > MAX_VISIBLE) {
+    bar.innerHTML += `<button class="tag-expand-btn" onclick="collapseTags()">Show less</button>`;
+  }
+}
+
+function toggleTagFilter(tag) {
+  activeTagFilter = activeTagFilter === tag ? null : tag;
+  tagBarExpanded  = false;
+  renderTagFilterBar();
+  applyFilter();
+}
+function expandTags()   { tagBarExpanded = true;  renderTagFilterBar(); }
+function collapseTags() { tagBarExpanded = false; renderTagFilterBar(); }
+
+// ── Sort ──────────────────────────────────────────────────────────────────────
+function onSortChange() {
+  sortField = document.getElementById('sort-field').value;
+  applyFilter();
+}
+function onSortDirToggle() {
+  sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  document.getElementById('sort-dir-btn').textContent = sortDir === 'asc' ? '↑ Asc' : '↓ Desc';
+  applyFilter();
+}
+function compareBooks(a, b) {
+  const d = sortDir === 'asc' ? 1 : -1;
+  if (sortField === 'series') {
+    const aHas = !!a.series, bHas = !!b.series;
+    if (aHas !== bHas) return aHas ? -1 : 1;
+    const sc = (a.series ?? '').localeCompare(b.series ?? '');
+    if (sc !== 0) return d * sc;
+    return d * ((parseFloat(a.seriesIndex) || 0) - (parseFloat(b.seriesIndex) || 0));
+  }
+  if (sortField === 'title')  return d * (a.title  ?? '').localeCompare(b.title  ?? '');
+  if (sortField === 'author') return d * (a.author ?? '').localeCompare(b.author ?? '');
+  return 0;
+}
+
+// ── Filter + render ───────────────────────────────────────────────────────────
+function applyFilter() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  let filtered = allBooks;
+
+  if (q) {
+    filtered = filtered.filter(b =>
+      b.title?.toLowerCase().includes(q) ||
+      b.author?.toLowerCase().includes(q) ||
+      b.series?.toLowerCase().includes(q)
+    );
+  }
+  if (activeTagFilter) {
+    filtered = filtered.filter(b => (b.tags ?? []).includes(activeTagFilter));
+  }
+
+  filtered = [...filtered].sort(compareBooks);
+  renderBookGrid(filtered);
+  updateStats(filtered.length);
+}
+
+function updateStats(filteredCount) {
+  const totalBooks = allBooks.length;
+  const totalReads = Object.values(bookReadsMap).reduce((s, r) => s + r.length, 0);
+  const base = `${totalBooks} book${totalBooks !== 1 ? 's' : ''} · ${totalReads} read${totalReads !== 1 ? 's' : ''}`;
+  document.getElementById('books-stats').textContent =
+    filteredCount < totalBooks ? `${filteredCount} of ${base}` : base;
+}
+
+function starsHtml(avgRating) {
+  if (!avgRating) return '';
+  const r = Math.round(avgRating);
+  return '★'.repeat(r) + '☆'.repeat(5 - r);
+}
+
+function renderBookGrid(books) {
+  const grid = document.getElementById('books-grid');
+  if (!books.length) {
+    grid.innerHTML = '<p class="empty-state">No books match your filter.</p>';
+    return;
+  }
+
+  grid.innerHTML = books.map(book => {
+    const reads    = bookReadsMap[book.bookId] ?? [];
+    const ratings  = reads.map(r => r.rating).filter(Boolean);
+    const avgRating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
+    const isReading = reads.some(r => r.started && !r.finished);
+    const readCount = reads.length;
+
+    const coverHtml = book.coverUrl
+      ? `<img class="book-cover" src="${esc(book.coverUrl)}" alt="" loading="lazy">`
+      : `<div class="book-cover book-cover-placeholder">📖</div>`;
+
+    const readingDot = isReading ? `<div class="reading-dot" title="Currently reading"></div>` : '';
+
+    const seriesHtml = seriesLabel(book)
+      ? `<div class="book-series-label">${esc(seriesLabel(book))}</div>`
+      : '';
+
+    const starsStr = starsHtml(avgRating);
+    const metaParts = [];
+    if (starsStr)  metaParts.push(`<span class="star-rating" title="${avgRating?.toFixed(1)} avg">${starsStr}</span>`);
+    if (readCount) metaParts.push(`<span class="read-count">${readCount} read${readCount !== 1 ? 's' : ''}</span>`);
+    if (isReading) metaParts.push(`<span class="reading-label">📖 Reading</span>`);
+    const metaHtml = metaParts.length ? `<div class="book-meta-row">${metaParts.join('')}</div>` : '';
+
+    const tagsHtml = (book.tags ?? []).length
+      ? `<div class="book-tags-row">${book.tags.map(t => `<span class="book-tag">${esc(t)}</span>`).join('')}</div>`
+      : '';
+
+    return `
+      <a class="book-card" href="/books/book.html?id=${esc(book.bookId)}">
+        <div class="book-cover-wrap">
+          ${coverHtml}
+          ${readingDot}
+        </div>
+        <div class="book-info">
+          ${seriesHtml}
+          <div class="book-title-text">${esc(book.title)}</div>
+          <div class="book-author-text">${esc(book.author)}</div>
+          ${metaHtml}
+          ${tagsHtml}
+        </div>
+      </a>`;
+  }).join('');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isErr ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  // Handle PKCE callback
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('code')) {
+    try {
+      const tokens = await exchangeCode(params.get('code'));
+      sessionStorage.setItem('access_token',  tokens.access_token);
+      sessionStorage.setItem('refresh_token', tokens.refresh_token);
+      accessToken = tokens.access_token;
+    } catch {
+      toast('Sign-in failed. Please try again.', true);
+    }
+    history.replaceState({}, '', '/books/');
+  } else {
+    accessToken = sessionStorage.getItem('access_token');
+  }
+
+  if (accessToken) {
+    await maybeRefreshToken();
+    applyAuthState();
+  }
+
+  await loadData();
+}
+
+init();
+</script>
+</body>
+</html>
