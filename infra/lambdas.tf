@@ -22,6 +22,10 @@ data "archive_file" "create_post" {
     content  = file("${path.module}/../src/shared/auth.mjs")
     filename = "auth.mjs"
   }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
+  }
 }
 
 data "archive_file" "update_post" {
@@ -35,6 +39,10 @@ data "archive_file" "update_post" {
     content  = file("${path.module}/../src/shared/auth.mjs")
     filename = "auth.mjs"
   }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
+  }
 }
 
 data "archive_file" "delete_post" {
@@ -47,6 +55,10 @@ data "archive_file" "delete_post" {
   source {
     content  = file("${path.module}/../src/shared/auth.mjs")
     filename = "auth.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
   }
 }
 
@@ -80,6 +92,10 @@ data "archive_file" "admin_files" {
     content  = file("${path.module}/../src/shared/auth.mjs")
     filename = "auth.mjs"
   }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
+  }
 }
 
 data "archive_file" "admin_users" {
@@ -92,6 +108,10 @@ data "archive_file" "admin_users" {
   source {
     content  = file("${path.module}/../src/shared/auth.mjs")
     filename = "auth.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
   }
 }
 
@@ -261,8 +281,15 @@ resource "aws_lambda_function" "rss_feed" {
 # ── list-apps ────────────────────────────────────────────────────────────────
 data "archive_file" "list_apps" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/functions/list-apps"
   output_path = "${path.module}/.lambda-zips/list-apps.zip"
+  source {
+    content  = file("${path.module}/../src/functions/list-apps/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
+  }
 }
 
 resource "aws_lambda_function" "list_apps" {
@@ -292,6 +319,10 @@ data "archive_file" "admin_apps" {
     content  = file("${path.module}/../src/shared/auth.mjs")
     filename = "auth.mjs"
   }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
+  }
 }
 
 resource "aws_lambda_function" "admin_apps" {
@@ -320,6 +351,10 @@ data "archive_file" "reading_log" {
   source {
     content  = file("${path.module}/../src/shared/auth.mjs")
     filename = "auth.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
   }
 }
 

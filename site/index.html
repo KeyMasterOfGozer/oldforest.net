@@ -191,6 +191,7 @@
 </main>
 
 <script src="/js/util.js"></script>
+<script src="/js/auth.js"></script>
 <script>
 'use strict';
 
@@ -204,58 +205,11 @@ const CFG = {
 let accessToken = null;
 let allPosts = [];
 
-// ── PKCE ──────────────────────────────────────
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-async function generatePKCE() {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return { verifier, challenge: b64url(digest) };
-}
-
 // ── AUTH ──────────────────────────────────────
-async function login() {
-  const { verifier, challenge } = await generatePKCE();
-  sessionStorage.setItem('pkce_verifier', verifier);
-  // Only set return_to if not already pointing somewhere specific (e.g. profile page after 401)
-  if (!sessionStorage.getItem('return_to')) {
-    sessionStorage.setItem('return_to', window.location.href);
-  }
-  const p = new URLSearchParams({
-    response_type: 'code', client_id: CFG.clientId,
-    redirect_uri: CFG.redirectUri, scope: 'openid email profile aws.cognito.signin.user.admin',
-    code_challenge_method: 'S256', code_challenge: challenge,
-  });
-  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
-}
-
-function logout() {
-  accessToken = null;
-  sessionStorage.clear();
-  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
-  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
-}
-
-async function exchangeCode(code) {
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code', client_id: CFG.clientId,
-      redirect_uri: CFG.redirectUri, code, code_verifier: verifier,
-    }),
-  });
-  if (!res.ok) throw new Error('Token exchange failed');
-  return res.json();
-}
-
-function parseJWT(token) {
-  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
-  catch { return {}; }
-}
+// b64url/generatePKCE/parseJWT/pkceLogin/pkceLogout/pkceExchangeCode provided by /js/auth.js
+function login() { return pkceLogin(CFG); }
+function logout() { accessToken = null; return pkceLogout(CFG); }
+async function exchangeCode(code) { return pkceExchangeCode(CFG, code); }
 
 function isTokenExpired(token) {
   if (!token) return true;
@@ -337,11 +291,7 @@ function applyFilter() {
   const tag = new URLSearchParams(window.location.search).get('tag');
   const bar = document.getElementById('tag-filter-bar');
 
-  // Update tag cloud active state
-  document.querySelectorAll('.tag-cloud-item').forEach(el => {
-    el.classList.toggle('active', el.textContent.trim().startsWith(tag || '\0'));
-  });
-  // Re-build so active highlight is accurate
+  // Rebuild the tag cloud so its active-tag highlight reflects the current filter
   buildTagCloud(allPosts);
 
   if (tag) {
@@ -463,8 +413,9 @@ async function loadCurrentlyReading() {
 
     const container = document.getElementById('cr-books');
     container.innerHTML = current.map(b => {
-      const cover = b.coverUrl
-        ? `<img class="cr-cover" src="${esc(b.coverUrl)}" alt="" loading="lazy">`
+      const safeCoverUrl = safeUrl(b.coverUrl);
+      const cover = safeCoverUrl
+        ? `<img class="cr-cover" src="${esc(safeCoverUrl)}" alt="" loading="lazy">`
         : `<div class="cr-cover-placeholder">📕</div>`;
 
       // Exact links (have real IDs) — shown first, full colour
@@ -484,8 +435,9 @@ async function loadCurrentlyReading() {
       if (b.royalRoadId) {
         exactLinks.push(`<a class="cr-link cr-link-rr" href="https://www.royalroad.com/fiction/${encodeURIComponent(b.royalRoadId)}" target="_blank" rel="noopener">Royal Road</a>`);
       }
-      if (b.goodreadsUrl) {
-        exactLinks.push(`<a class="cr-link cr-link-gr" href="${esc(b.goodreadsUrl)}" target="_blank" rel="noopener">Goodreads</a>`);
+      const safeGoodreadsUrl = safeUrl(b.goodreadsUrl);
+      if (safeGoodreadsUrl) {
+        exactLinks.push(`<a class="cr-link cr-link-gr" href="${esc(safeGoodreadsUrl)}" target="_blank" rel="noopener">Goodreads</a>`);
       }
 
       // Search fallbacks (no ID available) — shown last, muted style with 🔍
@@ -494,7 +446,7 @@ async function loadCurrentlyReading() {
         const q = encodeURIComponent(b.title + ' ' + b.author);
         searchLinks.push(`<a class="cr-link cr-link-search" href="https://books.google.com/books?q=${q}" target="_blank" rel="noopener">🔍 Search Google Books</a>`);
       }
-      if (!b.goodreadsUrl) {
+      if (!safeGoodreadsUrl) {
         const q = encodeURIComponent(b.isbn || (b.title + ' ' + b.author));
         searchLinks.push(`<a class="cr-link cr-link-search" href="https://www.goodreads.com/search?q=${q}" target="_blank" rel="noopener">🔍 Search Goodreads</a>`);
       }

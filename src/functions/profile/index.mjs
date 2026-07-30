@@ -15,7 +15,7 @@ export const handler = async (event) => {
   const token = rawToken(event);
   if (!token) return { statusCode: 401, body: JSON.stringify({ message: 'Unauthorized' }) };
 
-  const method = event.requestMethod || event.httpMethod || event.requestContext?.http?.method;
+  const method = event.requestContext?.http?.method;
 
   try {
     // GET /v1/profile — return current user attributes

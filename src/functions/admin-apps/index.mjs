@@ -2,14 +2,14 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, PutCommand, UpdateCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 import { requireAdmin } from './auth.mjs';
+import { respond } from './http.mjs';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient());
-const CORS = { 'Access-Control-Allow-Origin': 'https://oldforest.net', 'Content-Type': 'application/json' };
 
-function ok(body)            { return { statusCode: 200, headers: CORS, body: JSON.stringify(body) }; }
-function created(body)       { return { statusCode: 201, headers: CORS, body: JSON.stringify(body) }; }
-function noContent()         { return { statusCode: 204, headers: CORS, body: '' }; }
-function fail(status, msg)   { return { statusCode: status, headers: CORS, body: JSON.stringify({ message: msg }) }; }
+function ok(body)            { return respond(200, body); }
+function created(body)       { return respond(201, body); }
+function noContent()         { return respond(204); }
+function fail(status, msg)   { return respond(status, { message: msg }); }
 
 export const handler = async (event) => {
   try { requireAdmin(event); }

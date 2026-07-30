@@ -9,22 +9,18 @@ import {
   AdminListGroupsForUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { requireAdmin } from './auth.mjs';
+import { respond } from './http.mjs';
 
 const cognito = new CognitoIdentityProviderClient();
 const USER_POOL_ID = process.env.USER_POOL_ID;
 
 const MANAGED_GROUPS = ['members', 'editors', 'admins'];
 
-const CORS = {
-  'Access-Control-Allow-Origin': 'https://oldforest.net',
-  'Content-Type': 'application/json',
-};
-
 function ok(body, status = 200) {
-  return { statusCode: status, headers: CORS, body: JSON.stringify(body) };
+  return respond(status, body);
 }
 function errRes(status, message) {
-  return { statusCode: status, headers: CORS, body: JSON.stringify({ message }) };
+  return respond(status, { message });
 }
 
 async function getUserGroups(username) {
@@ -146,7 +142,7 @@ export const handler = async (event) => {
         UserPoolId: USER_POOL_ID,
         Username: username,
       }));
-      return { statusCode: 204, headers: CORS, body: '' };
+      return respond(204);
     }
 
     return errRes(405, 'Method not allowed');

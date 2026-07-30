@@ -256,6 +256,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
 <script src="/js/util.js"></script>
+<script src="/js/auth.js"></script>
 <script>
 'use strict';
 
@@ -281,68 +282,16 @@ let postsCache = {};     // postId → post object, avoids JSON-in-HTML-attribut
 // ─────────────────────────────────────────────
 //  PKCE HELPERS
 // ─────────────────────────────────────────────
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-async function generatePKCE() {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return { verifier, challenge: b64url(digest) };
-}
-
 // ─────────────────────────────────────────────
 //  AUTH
 // ─────────────────────────────────────────────
-async function login() {
-  const { verifier, challenge } = await generatePKCE();
-  sessionStorage.setItem('pkce_verifier', verifier);
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: CFG.clientId,
-    redirect_uri: CFG.redirectUri,
-    scope: 'openid email profile aws.cognito.signin.user.admin',
-    code_challenge_method: 'S256',
-    code_challenge: challenge,
-  });
-  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${params}`;
-}
-
-function logout() {
-  accessToken = null;
-  sessionStorage.clear();
-  const params = new URLSearchParams({
-    client_id: CFG.clientId,
-    logout_uri: CFG.redirectUri,
-  });
-  window.location.href = `https://${CFG.cognitoDomain}/logout?${params}`;
-}
-
+// b64url/generatePKCE/parseJWT/pkceLogin/pkceLogout/pkceExchangeCode provided by /js/auth.js
+function login() { return pkceLogin(CFG); }
+function logout() { accessToken = null; return pkceLogout(CFG); }
 async function exchangeCode(code) {
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  if (!verifier) throw new Error('No PKCE verifier found');
-  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: CFG.clientId,
-      redirect_uri: CFG.redirectUri,
-      code,
-      code_verifier: verifier,
-    }),
-  });
-  if (!res.ok) throw new Error('Token exchange failed');
-  const data = await res.json();
+  const data = await pkceExchangeCode(CFG, code);
   sessionStorage.removeItem('pkce_verifier');
   return data;
-}
-
-function parseJWT(token) {
-  try {
-    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-  } catch { return {}; }
 }
 
 function isTokenExpired(token) {
@@ -420,13 +369,6 @@ async function apiFetch(path, opts = {}) {
 async function fetchPosts() {
   const data = await apiFetch('/v1/editor/posts');
   return data.posts ?? [];
-}
-
-async function fetchPost(postId) {
-  // Get metadata from list, content from get-post endpoint
-  const slug = currentPost?.slug;
-  if (!slug) return null;
-  return apiFetch(`/v1/posts/${slug}`);
 }
 
 async function savePost(fields) {
@@ -544,9 +486,7 @@ async function loadPosts() {
   }
 }
 
-function esc(str) {
-  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// esc() provided by /js/util.js
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -638,9 +578,10 @@ async function loadPostContent(slug) {
     const content = data.content ?? '';
     if (easyMDE) easyMDE.value(content);
     else document.getElementById('f-content').value = content;
-  } catch {
+  } catch (e) {
     if (easyMDE) easyMDE.value('');
     else document.getElementById('f-content').value = '';
+    toast('Failed to load post content — the editor is empty. Do not save until you reload.', 'error');
   }
 }
 
@@ -747,7 +688,7 @@ async function init() {
   const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
   const displayName = idClaims.name || idClaims.email || claims.username || 'My Profile';
   const userEmailEl = document.getElementById('user-email');
-  userEmailEl.innerHTML = `<a href="/profile.html" style="color:var(--muted);text-decoration:none;font-size:13px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">${displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</a>`;
+  userEmailEl.innerHTML = `<a href="/profile.html" style="color:var(--muted);text-decoration:none;font-size:13px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">${esc(displayName)}</a>`;
 
   // Wire up buttons first — before anything that might throw
   document.getElementById('btn-logout').onclick     = logout;
@@ -788,7 +729,11 @@ async function init() {
       chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;';
       chip.title = 'Click to copy URL';
       chip.innerHTML = `${isImage ? '🖼' : '📄'} ${esc(file.name)}`;
-      chip.onclick = () => { navigator.clipboard.writeText(url); toast('URL copied!'); };
+      chip.onclick = () => {
+        navigator.clipboard.writeText(url)
+          .then(() => toast('URL copied!'))
+          .catch(() => toast('Copy failed — clipboard access denied', 'error'));
+      };
       document.getElementById('uploaded-files').appendChild(chip);
 
       statusEl.textContent = '';

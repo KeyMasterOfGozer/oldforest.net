@@ -98,6 +98,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="/js/util.js"></script>
+<script src="/js/auth.js"></script>
 <script>
 'use strict';
 
@@ -110,43 +112,12 @@ const CFG = {
 
 let accessToken = null;
 
-// ── PKCE ──────────────────────────────────────
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-async function generatePKCE() {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return { verifier, challenge: b64url(digest) };
-}
-
-function parseJWT(token) {
-  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
-  catch { return {}; }
-}
-
 // ── AUTH ──────────────────────────────────────
-async function login() {
-  const { verifier, challenge } = await generatePKCE();
-  sessionStorage.setItem('pkce_verifier', verifier);
-  if (!sessionStorage.getItem('return_to')) {
-    sessionStorage.setItem('return_to', window.location.href);
-  }
-  const p = new URLSearchParams({
-    response_type: 'code', client_id: CFG.clientId,
-    redirect_uri: CFG.redirectUri, scope: 'openid email profile aws.cognito.signin.user.admin',
-    code_challenge_method: 'S256', code_challenge: challenge,
-  });
-  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
-}
-
-function logout() {
-  accessToken = null;
-  sessionStorage.clear();
-  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
-  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
-}
+// b64url/generatePKCE/parseJWT/pkceLogin/pkceLogout provided by /js/auth.js.
+// No exchangeCode here — redirectUri points to index.html, which does the
+// code exchange and bounces back here via the return_to pkceLogin sets.
+function login() { return pkceLogin(CFG); }
+function logout() { accessToken = null; return pkceLogout(CFG); }
 
 function isMemberUser() {
   if (!accessToken) return false;
@@ -177,9 +148,7 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// esc() provided by /js/util.js
 
 function renderPost(post) {
   // Members gate
@@ -238,7 +207,7 @@ async function init() {
     const idClaims = parseJWT(sessionStorage.getItem('id_token') || '');
     const groups = claims['cognito:groups'] ?? [];
     const displayName = idClaims.name || idClaims.email || 'My Profile';
-    emailEl.innerHTML = `<a href="/profile.html" style="color:var(--muted);text-decoration:none;font-family:-apple-system,sans-serif;font-size:14px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">${displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</a>`;
+    emailEl.innerHTML = `<a href="/profile.html" style="color:var(--muted);text-decoration:none;font-family:-apple-system,sans-serif;font-size:14px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">${esc(displayName)}</a>`;
     btnAuth.textContent = 'Sign out';
     btnAuth.onclick = logout;
     if (groups.includes('editors')) {

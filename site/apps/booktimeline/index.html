@@ -265,10 +265,7 @@ let scrubMax     = 0;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function isoToDate(iso) {
-  // Accepts YYYY-MM-DD or full ISO string
-  return iso ? new Date(iso.length === 10 ? iso + 'T12:00:00Z' : iso) : null;
-}
+// isoToDate → use parseISODate() from /js/util.js
 
 function readClass(read) {
   if (!read.book) return 'owned';
@@ -281,12 +278,7 @@ function readClass(read) {
   return 'owned';
 }
 
-// esc() and seriesLabel() provided by /js/util.js
-
-function stars(rating) {
-  if (!rating || rating <= 0) return '';
-  return '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
-}
+// esc(), seriesLabel(), starsHtml(), parseISODate() provided by /js/util.js
 
 function buildPopupHTML(read, book) {
   // Cover
@@ -297,7 +289,7 @@ function buildPopupHTML(read, book) {
 
   // Stars + meta
   const starsHtml = read.rating
-    ? `<div class="ip-stars">${stars(read.rating)}</div>` : '';
+    ? `<div class="ip-stars">${starsHtml(read.rating)}</div>` : '';
   const metaParts = [];
   if (read.format) metaParts.push(read.format.charAt(0).toUpperCase() + read.format.slice(1));
   if (read.started)  metaParts.push(read.started);
@@ -362,8 +354,8 @@ function buildItems(reads) {
   let id = 0;
   const now = new Date();
   for (const read of reads) {
-    const start = isoToDate(read.started);
-    const end   = isoToDate(read.finished);
+    const start = parseISODate(read.started);
+    const end   = parseISODate(read.finished);
     if (!start && !end) continue;
     const effectiveStart = start ?? end;
     const isCurrent      = !end;

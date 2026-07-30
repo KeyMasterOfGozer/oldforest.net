@@ -4,20 +4,16 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { requireAdmin } from './auth.mjs';
+import { respond } from './http.mjs';
 
 const s3 = new S3Client();
 const BUCKET = process.env.CONTENT_BUCKET;
 
-const CORS = {
-  'Access-Control-Allow-Origin': 'https://oldforest.net',
-  'Content-Type': 'application/json',
-};
-
 function ok(body) {
-  return { statusCode: 200, headers: CORS, body: JSON.stringify(body) };
+  return respond(200, body);
 }
 function err(status, message) {
-  return { statusCode: status, headers: CORS, body: JSON.stringify({ message }) };
+  return respond(status, { message });
 }
 
 export const handler = async (event) => {
@@ -62,7 +58,7 @@ export const handler = async (event) => {
         return err(400, 'Invalid or missing key parameter');
       }
       await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
-      return { statusCode: 204, headers: CORS, body: '' };
+      return respond(204);
     }
 
     return err(405, 'Method not allowed');

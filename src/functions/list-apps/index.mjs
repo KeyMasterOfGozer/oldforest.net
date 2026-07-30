@@ -1,8 +1,8 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { respond } from './http.mjs';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient());
-const CORS = { 'Access-Control-Allow-Origin': 'https://oldforest.net', 'Content-Type': 'application/json' };
 
 export const handler = async () => {
   try {
@@ -15,13 +15,9 @@ export const handler = async () => {
     const apps = (result.Items || [])
       .sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
 
-    return {
-      statusCode: 200,
-      headers: CORS,
-      body: JSON.stringify({ apps }),
-    };
+    return respond(200, { apps });
   } catch (e) {
     console.error('list-apps error:', e);
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ message: 'Internal error' }) };
+    return respond(500, { message: 'Internal error' });
   }
 };

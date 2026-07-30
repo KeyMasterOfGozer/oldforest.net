@@ -173,6 +173,7 @@
   </div>
 </main>
 
+<script src="/js/util.js"></script>
 <script>
 'use strict';
 
@@ -182,16 +183,7 @@ const API      = '/v1/reading/reads';
 let allReadings = [];
 let csvData     = '';
 
-function parseDate(str) {
-  // str is ISO date string like "2025-03-15" or null/undefined
-  if (!str) return null;
-  const d = new Date(str + 'T12:00:00Z'); // noon UTC to avoid timezone shifting
-  return isNaN(d) ? null : d;
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+// esc() and parseISODate() provided by /js/util.js
 
 function csvCell(v) {
   const s = String(v ?? '');
@@ -203,8 +195,8 @@ function processReads(reads) {
   const readings = [];
   for (const read of reads) {
     const book   = read.book ?? {};
-    const start  = parseDate(read.started);
-    const finish = parseDate(read.finished);
+    const start  = parseISODate(read.started);
+    const finish = parseISODate(read.finished);
     const end    = finish ?? new Date();
     const days   = start ? Math.round((end - start) / 86_400_000) : null;
     readings.push({

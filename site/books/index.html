@@ -170,6 +170,7 @@
 <div id="toast"></div>
 
 <script src="/js/util.js"></script>
+<script src="/js/auth.js"></script>
 <script>
 'use strict';
 
@@ -191,50 +192,11 @@ let tagBarExpanded  = false;
 let sortField = 'series';
 let sortDir   = 'asc';
 
-// ── PKCE ─────────────────────────────────────────────────────────────────────
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-async function generatePKCE() {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return { verifier, challenge: b64url(digest) };
-}
-async function login() {
-  const { verifier, challenge } = await generatePKCE();
-  sessionStorage.setItem('pkce_verifier', verifier);
-  const p = new URLSearchParams({
-    response_type: 'code', client_id: CFG.clientId,
-    redirect_uri: CFG.redirectUri,
-    scope: 'openid email profile aws.cognito.signin.user.admin',
-    code_challenge_method: 'S256', code_challenge: challenge,
-  });
-  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
-}
-function logout() {
-  accessToken = null;
-  sessionStorage.clear();
-  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
-  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
-}
-async function exchangeCode(code) {
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code', client_id: CFG.clientId,
-      redirect_uri: CFG.redirectUri, code, code_verifier: verifier,
-    }),
-  });
-  if (!res.ok) throw new Error('Token exchange failed');
-  return res.json();
-}
-function parseJWT(token) {
-  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
-  catch { return {}; }
-}
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+// b64url/generatePKCE/parseJWT/pkceLogin/pkceLogout/pkceExchangeCode provided by /js/auth.js
+function login() { return pkceLogin(CFG); }
+function logout() { accessToken = null; return pkceLogout(CFG); }
+async function exchangeCode(code) { return pkceExchangeCode(CFG, code); }
 function tokenExpiresInMs() {
   if (!accessToken) return 0;
   const claims = parseJWT(accessToken);
@@ -309,6 +271,9 @@ async function loadData() {
       if (!bookReadsMap[read.bookId]) bookReadsMap[read.bookId] = [];
       bookReadsMap[read.bookId].push(read);
     }
+  } else {
+    // Non-fatal — books still render, just without ratings/read-counts/badges.
+    toast('Failed to load reading history — ratings and read counts may be missing.', true);
   }
 
   renderTagFilterBar();
@@ -404,11 +369,7 @@ function updateStats(filteredCount) {
     filteredCount < totalBooks ? `${filteredCount} of ${base}` : base;
 }
 
-function starsHtml(avgRating) {
-  if (!avgRating) return '';
-  const r = Math.round(avgRating);
-  return '★'.repeat(r) + '☆'.repeat(5 - r);
-}
+// starsHtml() provided by /js/util.js
 
 function renderBookGrid(books) {
   const grid = document.getElementById('books-grid');
@@ -483,6 +444,17 @@ async function init() {
       sessionStorage.setItem('access_token',  tokens.access_token);
       sessionStorage.setItem('refresh_token', tokens.refresh_token);
       accessToken = tokens.access_token;
+
+      // Return to the specific page that started login (e.g. a book detail page).
+      // Cognito's registered callback URI is fixed to /books/, so book.html can't
+      // set redirect_uri to itself — this return_to hop is how it gets back to
+      // the exact book the user was viewing instead of landing on the list.
+      const returnTo = sessionStorage.getItem('return_to');
+      sessionStorage.removeItem('return_to');
+      if (returnTo && returnTo !== window.location.href) {
+        window.location.href = returnTo;
+        return;
+      }
     } catch {
       toast('Sign-in failed. Please try again.', true);
     }

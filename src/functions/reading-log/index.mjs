@@ -12,6 +12,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 import { getGroups } from './auth.mjs';
+import { respond, JSON_HEADERS } from './http.mjs';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const BOOKS_TABLE = process.env.BOOKS_TABLE;
@@ -20,19 +21,11 @@ const READS_TABLE = process.env.READS_TABLE;
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function ok(body, status = 200) {
-  return {
-    statusCode: status,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  };
+  return respond(status, body, JSON_HEADERS);
 }
 
 function err(message, status = 400) {
-  return {
-    statusCode: status,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ error: message }),
-  };
+  return respond(status, { error: message }, JSON_HEADERS);
 }
 
 function now() {

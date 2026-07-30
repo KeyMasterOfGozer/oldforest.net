@@ -139,6 +139,8 @@
   <div id="apps-grid"><div class="loading">Loading…</div></div>
 </main>
 
+<script src="/js/util.js"></script>
+<script src="/js/auth.js"></script>
 <script>
 'use strict';
 
@@ -152,60 +154,11 @@ const CFG = {
 let accessToken = null;
 let userGroups  = [];
 
-// ── PKCE ──────────────────────────────────────
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-async function generatePKCE() {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return { verifier, challenge: b64url(digest) };
-}
-
 // ── AUTH ──────────────────────────────────────
-async function login() {
-  const { verifier, challenge } = await generatePKCE();
-  sessionStorage.setItem('pkce_verifier', verifier);
-  sessionStorage.setItem('return_to', window.location.href);
-  const p = new URLSearchParams({
-    response_type: 'code', client_id: CFG.clientId,
-    redirect_uri: CFG.redirectUri,
-    scope: 'openid email profile aws.cognito.signin.user.admin',
-    code_challenge_method: 'S256', code_challenge: challenge,
-  });
-  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
-}
-
-function logout() {
-  accessToken = null;
-  sessionStorage.clear();
-  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
-  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
-}
-
-async function exchangeCode(code) {
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  const res = await fetch(`https://${CFG.cognitoDomain}/oauth2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code', client_id: CFG.clientId,
-      redirect_uri: CFG.redirectUri, code, code_verifier: verifier,
-    }),
-  });
-  if (!res.ok) throw new Error('Token exchange failed');
-  return res.json();
-}
-
-function parseJWT(token) {
-  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
-  catch { return {}; }
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// b64url/generatePKCE/parseJWT/esc/pkceLogin/pkceLogout/pkceExchangeCode provided by /js/util.js + /js/auth.js
+function login() { return pkceLogin(CFG); }
+function logout() { accessToken = null; return pkceLogout(CFG); }
+async function exchangeCode(code) { return pkceExchangeCode(CFG, code); }
 
 // ── VISIBILITY FILTERING ───────────────────────
 function canSee(visibility) {

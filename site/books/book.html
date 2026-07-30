@@ -184,6 +184,7 @@
 <div id="toast"></div>
 
 <script src="/js/util.js"></script>
+<script src="/js/auth.js"></script>
 <script>
 'use strict';
 
@@ -199,40 +200,14 @@ let isEditorUser = false;
 let currentBook  = null;
 let editingReadId = null;   // null = new, string = editing existing
 let editReadRating = 0;
-let editBookRating = 0;     // unused but reserved
 
-// ── PKCE ─────────────────────────────────────────────────────────────────────
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-async function generatePKCE() {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return { verifier, challenge: b64url(digest) };
-}
-async function login() {
-  const { verifier, challenge } = await generatePKCE();
-  sessionStorage.setItem('pkce_verifier', verifier);
-  // After auth, land on the books list (then navigate back to this book)
-  const p = new URLSearchParams({
-    response_type: 'code', client_id: CFG.clientId,
-    redirect_uri: CFG.redirectUri,
-    scope: 'openid email profile aws.cognito.signin.user.admin',
-    code_challenge_method: 'S256', code_challenge: challenge,
-  });
-  window.location.href = `https://${CFG.cognitoDomain}/oauth2/authorize?${p}`;
-}
-function logout() {
-  accessToken = null;
-  sessionStorage.clear();
-  const p = new URLSearchParams({ client_id: CFG.clientId, logout_uri: CFG.redirectUri });
-  window.location.href = `https://${CFG.cognitoDomain}/logout?${p}`;
-}
-function parseJWT(token) {
-  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
-  catch { return {}; }
-}
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+// b64url/generatePKCE/parseJWT/pkceLogin/pkceLogout provided by /js/auth.js.
+// No exchangeCode here — Cognito's registered callback URI is fixed to /books/,
+// so the code lands on books/index.html; pkceLogin's return_to is what brings
+// the user back to this specific book afterward.
+function login() { return pkceLogin(CFG); }
+function logout() { accessToken = null; return pkceLogout(CFG); }
 function tokenExpiresInMs() {
   if (!accessToken) return 0;
   const claims = parseJWT(accessToken);
@@ -303,18 +278,7 @@ function toast(msg, isErr = false) {
   toastTimer = setTimeout(() => { el.className = ''; }, 3500);
 }
 
-// ── Stars helper ──────────────────────────────────────────────────────────────
-function starsHtml(n) {
-  if (!n) return '';
-  const r = Math.round(n);
-  return '★'.repeat(r) + '☆'.repeat(5 - r);
-}
-
-function formatDate(d) {
-  if (!d) return '';
-  const dt = new Date(d + 'T00:00:00');
-  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
+// starsHtml() and fmtShortDate() provided by /js/util.js
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderBook(book) {
@@ -471,8 +435,8 @@ function renderBook(book) {
 
 function renderReadCard(r) {
   const dateParts = [];
-  if (r.started)  dateParts.push(`Started ${formatDate(r.started)}`);
-  if (r.finished) dateParts.push(`Finished ${formatDate(r.finished)}`);
+  if (r.started)  dateParts.push(`Started ${fmtShortDate(r.started)}`);
+  if (r.finished) dateParts.push(`Finished ${fmtShortDate(r.finished)}`);
   const datesStr = dateParts.join(' · ') || 'Dates not recorded';
 
   const starsStr = r.rating ? starsHtml(r.rating) : '';

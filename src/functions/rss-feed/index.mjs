@@ -18,15 +18,24 @@ function esc(s) {
 }
 
 export const handler = async () => {
-  const result = await dynamo.send(new ScanCommand({
-    TableName: process.env.POSTS_TABLE,
-    FilterExpression: '#s = :published AND visibility = :public',
-    ExpressionAttributeNames: { '#s': 'status' },
-    ExpressionAttributeValues: { ':published': 'published', ':public': 'public' },
-    ProjectionExpression: 'postId, slug, title, summary, author, createdAt, updatedAt, tags',
-  }));
+  // Scan repeatedly until DynamoDB stops returning a LastEvaluatedKey — a single
+  // Scan truncates at ~1MB and could otherwise miss the actual most-recent posts.
+  const allItems = [];
+  let lastKey;
+  do {
+    const result = await dynamo.send(new ScanCommand({
+      TableName: process.env.POSTS_TABLE,
+      FilterExpression: '#s = :published AND visibility = :public',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':published': 'published', ':public': 'public' },
+      ProjectionExpression: 'postId, slug, title, summary, author, createdAt, updatedAt, tags',
+      ExclusiveStartKey: lastKey,
+    }));
+    allItems.push(...(result.Items ?? []));
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
 
-  const posts = (result.Items ?? [])
+  const posts = allItems
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     .slice(0, MAX_ITEMS);
 
