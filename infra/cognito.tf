@@ -90,6 +90,65 @@ resource "aws_cognito_user_pool_client" "main" {
   refresh_token_validity = 7    # 7 days — shrinks the exfiltration window for a stolen refresh token
 }
 
+# ── Desktop app client (Calibre plugin) ───────────────────────────────────────
+# Deliberately separate from the web client above: the plugin needs loopback
+# (http://localhost) callback URLs, and registering those on the browser client
+# would widen its redirect surface for no reason. Public client — it ships on
+# user machines, so it can't hold a secret; PKCE is what protects the exchange.
+resource "aws_cognito_user_pool_client" "calibre_plugin" {
+  name         = "oldforest-calibre-plugin"
+  user_pool_id = aws_cognito_user_pool.main.id
+
+  generate_secret = false
+
+  explicit_auth_flows = [
+    "ALLOW_REFRESH_TOKEN_AUTH",
+    "ALLOW_USER_SRP_AUTH",
+    "ALLOW_USER_AUTH", # passkey sign-in, same as the web client
+  ]
+
+  supported_identity_providers = ["COGNITO"]
+
+  # RFC 8252 loopback redirect. Cognito matches redirect_uri exactly, so every
+  # port the plugin might bind has to be pre-registered — three are listed so
+  # sign-in still works when one is already in use. http://localhost is the one
+  # documented exception to Cognito's HTTPS-only callback rule.
+  callback_urls = [
+    "http://localhost:8788/callback",
+    "http://localhost:8789/callback",
+    "http://localhost:8790/callback",
+  ]
+
+  logout_urls = [
+    "http://localhost:8788/callback",
+    "http://localhost:8789/callback",
+    "http://localhost:8790/callback",
+  ]
+
+  allowed_oauth_flows = ["code"] # authorization code + PKCE only, no implicit
+  # Narrower than the web client: the plugin only calls our own API, so it never
+  # needs aws.cognito.signin.user.admin (that scope exists for Cognito's own
+  # self-service user APIs, which the plugin doesn't touch).
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+  allowed_oauth_flows_user_pool_client = true
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 7 # matches the web client
+}
+
+# ⚠ Managed Login v2 serves sign-in pages *per app client* and answers
+# "Login pages unavailable" for any client with no branding record. A new client
+# is therefore unusable until branding is created for it. The AWS provider still
+# has no resource for this as of 5.100.0, so it is a one-time CLI step — see
+# TERRAFORM_MIGRATION.md §9, which now covers this client as well as the web one.
+
 resource "aws_cognito_user_pool_domain" "main" {
   domain       = "auth-${data.aws_caller_identity.current.account_id}"
   user_pool_id = aws_cognito_user_pool.main.id

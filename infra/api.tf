@@ -30,8 +30,14 @@ resource "aws_apigatewayv2_authorizer" "cognito" {
   name             = "CognitoAuthorizer"
 
   jwt_configuration {
-    issuer   = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
-    audience = [aws_cognito_user_pool_client.main.id]
+    issuer = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
+    # Both clients that may call this API. For Cognito *access* tokens (what the
+    # site and the plugin actually send) API Gateway matches the `client_id`
+    # claim against this list; `aud` is only present on ID tokens.
+    audience = [
+      aws_cognito_user_pool_client.main.id,
+      aws_cognito_user_pool_client.calibre_plugin.id,
+    ]
   }
 }
 

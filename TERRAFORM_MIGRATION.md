@@ -192,12 +192,32 @@ CLIENT_ID=$(AWS_PROFILE=oldforest terraform output -raw user_pool_client_id)
 
 **Step 1 — Create minimal branding (activates the Managed Login pages):**
 
+⚠️ Managed Login v2 serves sign-in pages **per app client**. Any client without a
+branding record answers `Login pages unavailable / Please contact an
+administrator`, so this must be run for **every** app client that uses the hosted
+UI — currently the website *and* the Calibre plugin.
+
 ```bash
-AWS_PROFILE=oldforest aws cognito-idp create-managed-login-branding \
-  --user-pool-id "$USER_POOL_ID" \
-  --client-id "$CLIENT_ID" \
-  --use-cognito-provided-values \
-  --region us-east-1
+cd infra
+USER_POOL_ID=$(AWS_PROFILE=oldforest terraform output -raw user_pool_id)
+
+for CLIENT_ID in \
+  "$(AWS_PROFILE=oldforest terraform output -raw user_pool_client_id)" \
+  "$(AWS_PROFILE=oldforest terraform output -raw calibre_plugin_client_id)"
+do
+  AWS_PROFILE=oldforest aws cognito-idp create-managed-login-branding \
+    --user-pool-id "$USER_POOL_ID" \
+    --client-id "$CLIENT_ID" \
+    --use-cognito-provided-values \
+    --region us-east-1
+done
+```
+
+Verify a client has branding with:
+
+```bash
+AWS_PROFILE=oldforest aws cognito-idp describe-managed-login-branding-by-client \
+  --user-pool-id "$USER_POOL_ID" --client-id "<client-id>" --region us-east-1
 ```
 
 **Step 2 — Switch the domain to Managed Login v2:**

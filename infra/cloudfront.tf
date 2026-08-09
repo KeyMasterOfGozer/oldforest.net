@@ -80,13 +80,16 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     #            cdnjs.cloudflare.com — marked/DOMPurify/vis-timeline
     #            cdn.jsdelivr.net — EasyMDE (editor's markdown toolbar, site/editor/index.html)
     # - styles: unsafe-inline required — all CSS is in inline <style> blocks
+    #           cdnjs.cloudflare.com — vis-timeline stylesheet
+    #           cdn.jsdelivr.net — EasyMDE stylesheet (editor's markdown toolbar CSS,
+    #           needed alongside the script-src entry below — same CDN, different directive)
     # - images: self, https (cover art, OG images), data: (inline SVGs)
     # - connect: self (CloudFront /v1/* proxy) + direct API GW URL used in CFG.apiBase
     #            + Cognito token endpoint (PKCE code exchange + token refresh)
     #            + OpenLibrary + Google Books (book search)
     # - frame-ancestors: none (belt-and-suspenders with X-Frame-Options)
     content_security_policy {
-      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' https: data:; connect-src 'self' https://*.execute-api.us-east-1.amazonaws.com https://*.amazoncognito.com https://openlibrary.org https://www.googleapis.com https://*.s3.us-east-1.amazonaws.com; frame-ancestors 'none';"
+      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' https: data:; connect-src 'self' https://*.execute-api.us-east-1.amazonaws.com https://*.amazoncognito.com https://openlibrary.org https://www.googleapis.com https://*.s3.us-east-1.amazonaws.com; frame-ancestors 'none';"
       override                = true
     }
   }

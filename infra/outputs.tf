@@ -13,6 +13,16 @@ output "user_pool_client_id" {
   value       = aws_cognito_user_pool_client.main.id
 }
 
+output "calibre_plugin_client_id" {
+  description = "Cognito app client ID used by the Calibre plugin (calibre-plugin/)"
+  value       = aws_cognito_user_pool_client.calibre_plugin.id
+}
+
+output "cognito_domain" {
+  description = "Cognito Hosted UI domain (used by the Calibre plugin config)"
+  value       = "${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com"
+}
+
 output "cloudfront_distribution_id" {
   description = "CloudFront Distribution ID"
   value       = aws_cloudfront_distribution.main.id

@@ -12,3 +12,8 @@ infra/.lambda-zips/
 *.tfvars.json
 crash.log
 
+# Calibre plugin build artifact (rebuild with calibre-plugin/build.sh)
+calibre-plugin/oldforest-books-plugin.zip
+__pycache__/
+*.pyc
+
