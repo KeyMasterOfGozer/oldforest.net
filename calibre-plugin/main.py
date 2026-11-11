@@ -16,6 +16,7 @@ from calibre_plugins.oldforest_books.metadata_map import (EXACT, STRONG, WEAK,
                                                           build_index, changed_fields,
                                                           find_candidates, missing_tags,
                                                           parse_tag_list, with_extra_tags)
+from calibre_plugins.oldforest_books.updates import newer_available
 
 CREATE = '__create__'   # userData marking the "create a new book" choice
 SKIP = '__skip__'       # book can't be pushed at all
@@ -43,6 +44,18 @@ class PushDialog(QDialog):
         self.resize(920, 520)
 
         layout = QVBoxLayout(self)
+
+        # Hidden until a background check finds a newer published build. Placed
+        # above the heading so an out-of-date plugin is obvious before pushing —
+        # a stale copy silently lacks whatever the newest one added.
+        self.update_notice = QLabel(self)
+        self.update_notice.setWordWrap(True)
+        self.update_notice.setOpenExternalLinks(True)
+        self.update_notice.setVisible(False)
+        self.update_notice.setStyleSheet(
+            'background: #2e2408; border: 1px solid #5a4a10; border-radius: 6px;'
+            'padding: 8px 10px; color: #d8c070;')
+        layout.addWidget(self.update_notice)
 
         self.heading = QLabel(self)
         self.heading.setWordWrap(True)
@@ -86,6 +99,43 @@ class PushDialog(QDialog):
 
         self._set_busy(True)
         QTimer.singleShot(0, self._build_plan)
+        QTimer.singleShot(0, self._check_for_update)
+
+    # ── update check ─────────────────────────────────────────────────────────
+
+    def _check_for_update(self):
+        """Look for a newer published build, entirely in the background.
+
+        Never blocks or fails the dialog: on any problem the notice simply stays
+        hidden.
+        """
+        from calibre_plugins.oldforest_books import PLUGIN_VERSION
+
+        result = {}
+
+        def worker():
+            try:
+                result['found'] = newer_available(PLUGIN_VERSION, prefs['api_base'])
+            except Exception:
+                result['found'] = None
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        def done():
+            found = result.get('found')
+            if not found:
+                return
+            version, url = found
+            current = '.'.join(str(n) for n in PLUGIN_VERSION)
+            self.update_notice.setText(
+                'Plugin update available: <b>v%s</b> (you have v%s) — '
+                '<a href="%s" style="color:#e8d8b0">download</a>, then install via '
+                'Preferences → Plugins → Load plugin from file.'
+                % (version, current, url))
+            self.update_notice.setVisible(True)
+
+        self._await(thread, done)
 
     # ── planning ─────────────────────────────────────────────────────────────
 

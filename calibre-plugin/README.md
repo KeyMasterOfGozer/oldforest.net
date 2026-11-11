@@ -6,18 +6,44 @@ database (`/v1/reading/books`).
 Metadata only — Calibre has no native concept of "date read", so *reads* are
 still logged through the website.
 
-## Build and install
+## Install
+
+**Easiest — download the latest published build:**
+
+<https://oldforest.net/files/oldforest-books-plugin.zip>
+
+That URL is stable and always serves the newest release; it is also listed on
+the site's **Apps** page. Install it with **Preferences → Plugins → Load plugin
+from file**.
+
+**Or build from source:**
 
 ```bash
-bash calibre-plugin/build.sh --install
+bash calibre-plugin/build.sh --install   # build + install
+bash calibre-plugin/build.sh             # build only
 ```
 
-Or build the zip and load it by hand via **Preferences → Plugins → Load plugin
-from file**:
+### Staying up to date
+
+The push dialog checks the published manifest in the background and shows a
+notice when a newer build exists. The check is entirely non-blocking — if it
+fails for any reason the notice just stays hidden.
+
+### Publishing a new release (maintainer)
+
+**Bump `PLUGIN_VERSION` in `__init__.py` first**, then:
 
 ```bash
-bash calibre-plugin/build.sh
+AWS_PROFILE=oldforest bash scripts/publish-plugin.sh
 ```
+
+That runs the self-tests, builds, uploads the zip *and* a version manifest,
+invalidates both CDN paths, and verifies what the CDN actually serves.
+
+It **refuses to publish a version that is already published** (override with
+`FORCE=1`). Shipping two different builds under one version number is what
+leaves a stale install unable to tell it is out of date — the exact failure the
+manifest exists to prevent.
 
 **Calibre must be restarted after installing** — plugins are not loaded live.
 

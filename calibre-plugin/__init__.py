@@ -2,6 +2,14 @@
 
 from calibre.customize import InterfaceActionBase
 
+# Single source of truth for the version: the class attribute below, the update
+# check in updates.py, and scripts/publish-plugin.sh all read this one value.
+#
+# ⚠ Bump this on every publish. The update check compares published version
+# against installed version, so shipping two different builds under the same
+# number leaves an out-of-date install with no way to know it is stale.
+PLUGIN_VERSION = (1, 1, 0)
+
 
 class OldforestBooksPlugin(InterfaceActionBase):
 
@@ -10,7 +18,7 @@ class OldforestBooksPlugin(InterfaceActionBase):
                    'reading-log database')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Mike Greene'
-    version = (1, 0, 0)
+    version = PLUGIN_VERSION
     # qt.core, the modern Qt6 binding used throughout, needs a recent calibre.
     minimum_calibre_version = (6, 0, 0)
 

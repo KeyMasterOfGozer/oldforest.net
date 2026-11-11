@@ -83,6 +83,7 @@ Calibre (desktop)
 │
 ├── scripts/                    # Deploy + one-off data migration tooling
 │   ├── deploy.sh               # Primary deploy path (see below)
+│   ├── publish-plugin.sh       # Build + publish the Calibre plugin
 │   └── …                       # LibraryThing/Calibre/Joomla import + cleanup scripts
 │
 ├── docs/
@@ -194,12 +195,22 @@ CRUD for the apps directory (name, description, icon, URL, visibility, order, en
 
 Pushes book metadata from a [Calibre](https://calibre-ebook.com/) library straight into the reading log, so books don't have to be re-entered by hand.
 
-There is **no prebuilt download** — the plugin zip is a build artifact and is gitignored. Clone the repo and build it:
+**Download the latest build:** <https://oldforest.net/files/oldforest-books-plugin.zip> (also linked from the Apps page). Install via **Preferences → Plugins → Load plugin from file**.
+
+Or build from source — the zip is gitignored, so it is produced locally:
 
 ```bash
 bash calibre-plugin/build.sh --install    # build + install into calibre
 bash calibre-plugin/build.sh              # build only → calibre-plugin/oldforest-books-plugin.zip
 ```
+
+Publish a new release — **bump `PLUGIN_VERSION` in `calibre-plugin/__init__.py` first**, then:
+
+```bash
+AWS_PROFILE=oldforest bash scripts/publish-plugin.sh
+```
+
+This tests, builds, uploads the zip plus a version manifest, invalidates the CDN, and verifies what is served. It refuses to republish an already-published version (`FORCE=1` overrides). The installed plugin polls that manifest and shows an in-app notice when it is out of date.
 
 Then **restart Calibre** (plugins are not loaded live). The action adds itself to the main toolbar and the book right-click menu on first launch.
 
@@ -292,6 +303,7 @@ The Calibre plugin's pure logic self-tests without Calibre or Qt:
 ```bash
 python3 calibre-plugin/metadata_map.py   # field mapping + match ranking
 python3 calibre-plugin/covers.py         # image sniffing + upload flow
+python3 calibre-plugin/updates.py        # version comparison
 ```
 
 ---
