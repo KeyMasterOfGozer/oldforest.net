@@ -432,7 +432,7 @@ function renderFiles(files) {
         <div class="file-thumb">${thumb}</div>
         <div class="file-info">
           <div class="file-name" title="${esc(f.filename)}">${esc(f.filename)}</div>
-          <div class="file-meta">${fmtSize(f.size)} · ${fmtDate(f.lastModified)}</div>
+          <div class="file-meta">${fmtSize(f.size)} · ${fmtDate(f.lastModified)}${accessBadge(f)}</div>
         </div>
         <div class="file-actions">
           <button class="btn-secondary btn-sm" onclick="copyFileUrl(${i})">Copy URL</button>
@@ -447,11 +447,24 @@ function filterFiles(q) {
   renderFiles(q ? allFiles.filter(f => f.filename.toLowerCase().includes(lq)) : allFiles);
 }
 
+/** Marks gated files so an admin doesn't hand out a link that will demand login. */
+function accessBadge(f) {
+  if (f.access === 'private') {
+    return ' · <span style="color:var(--members,#c8904a)">🔒 sign-in required</span>';
+  }
+  return '';
+}
+
 function copyFileUrl(i) {
   const f = window._displayedFiles[i];
-  const url = `${CFG.siteBase}/${f.key}`;
+  // The API returns the correct shareable URL per file: a direct CDN path for
+  // public files, or the download.html link for gated ones. Falls back to the
+  // old key-based form only if an older API response lacks it.
+  const url = f.url || `${CFG.siteBase}/${f.key}`;
   navigator.clipboard.writeText(url)
-    .then(() => toast('URL copied!'))
+    .then(() => toast(f.access === 'private'
+      ? 'Download link copied (recipient must sign in)'
+      : 'URL copied!'))
     .catch(() => toast('Copy failed — clipboard access denied', 'error'));
 }
 

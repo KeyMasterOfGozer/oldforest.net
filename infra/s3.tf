@@ -62,7 +62,19 @@ resource "aws_s3_bucket_policy" "content" {
       Effect    = "Allow"
       Principal = { Service = "cloudfront.amazonaws.com" }
       Action    = "s3:GetObject"
-      Resource  = "${aws_s3_bucket.content.arn}/images/*"
+      # Only these two prefixes are world-readable through the CDN.
+      #
+      # Deliberately NOT listed:
+      #   private/ — gated downloads, reachable only via a presigned URL minted
+      #              by the download-url Lambda for a signed-in caller
+      #   posts/   — Markdown bodies of posts, including drafts and personal
+      #              posts, fetched server-side by get-post after it has checked
+      #              visibility
+      # Adding either here would bypass those checks entirely.
+      Resource = [
+        "${aws_s3_bucket.content.arn}/images/*",
+        "${aws_s3_bucket.content.arn}/files/*",
+      ]
       Condition = {
         StringEquals = {
           "AWS:SourceArn" = aws_cloudfront_distribution.main.arn

@@ -224,6 +224,31 @@ resource "aws_iam_role_policy" "upload_url" {
   })
 }
 
+# ── download-url ──────────────────────────────────────────────────────────────
+resource "aws_iam_role" "download_url" {
+  name               = "oldforest-download-url"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+resource "aws_iam_role_policy_attachment" "download_url_logs" {
+  role       = aws_iam_role.download_url.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+resource "aws_iam_role_policy" "download_url" {
+  name = "s3-read-private"
+  role = aws_iam_role.download_url.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      # Read-only, and scoped to private/ alone. The function also checks the
+      # prefix itself; this is the belt-and-braces half — even a bug in that
+      # check cannot presign a post body or an image.
+      Action   = ["s3:GetObject"]
+      Resource = "${aws_s3_bucket.content.arn}/private/*"
+    }]
+  })
+}
+
 # ── admin-files ───────────────────────────────────────────────────────────────
 resource "aws_iam_role" "admin_files" {
   name               = "oldforest-admin-files"

@@ -67,6 +67,30 @@
     #post-content a { color: var(--accent); }
     #post-content hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
 
+    /* ── Download buttons ──
+       Matched three ways so a download always renders as a button: by the
+       explicit class the editor inserts, and by href pattern as a fallback in
+       case the Markdown sanitiser ever strips class attributes. */
+    #post-content a.download-btn,
+    #post-content a[href^="/files/"],
+    #post-content a[href^="/download.html?"] {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accent); color: #fff; text-decoration: none;
+      font-family: -apple-system, sans-serif; font-size: 15px; font-weight: 600;
+      border-radius: var(--radius); padding: 12px 22px; margin: 1em 0;
+      transition: opacity .15s;
+    }
+    #post-content a.download-btn:hover,
+    #post-content a[href^="/files/"]:hover,
+    #post-content a[href^="/download.html?"]:hover {
+      opacity: .88; text-decoration: none;
+    }
+    /* Gated files get a lock so readers know a sign-in is coming. */
+    #post-content a[href^="/download.html?"]::before { content: '🔒'; }
+    #post-content a.download-btn::before,
+    #post-content a[href^="/files/"]::before { content: '⬇'; font-size: 17px; }
+    #post-content a.download-btn[href^="/download.html?"]::before { content: '🔒'; }
+
     /* ── Members gate ── */
     #members-gate { display: none; text-align: center; padding: 60px 32px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-top: 8px; }
     #members-gate .lock { font-size: 40px; margin-bottom: 16px; }

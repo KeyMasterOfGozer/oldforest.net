@@ -27,7 +27,7 @@ Calibre (desktop)
   └─▶ Cognito Managed Login v2 (loopback PKCE) ─▶ /v1/reading/books
 ```
 
-**AWS services used:** CloudFront, S3 (×2), API Gateway HTTP API v2, Lambda (×14), DynamoDB (×4), Cognito User Pool, SSM Parameter Store, ACM, IAM, CloudFront Functions.
+**AWS services used:** CloudFront, S3 (×2), API Gateway HTTP API v2, Lambda (×15), DynamoDB (×4), Cognito User Pool, SSM Parameter Store, ACM, IAM, CloudFront Functions.
 
 ---
 
@@ -47,6 +47,7 @@ Calibre (desktop)
 │   │   ├── booktimeline/       # Reading history timeline (vis-timeline)
 │   │   ├── bookcsvgen/         # Yearly stats + CSV export
 │   │   └── reading-log/        # Book/read editor (editors group)
+│   ├── download.html           # Gated-download redirect page
 │   ├── editor/index.html       # Post editor (editors group)
 │   ├── admin/index.html        # Admin dashboard (admins group)
 │   ├── js/
@@ -60,6 +61,7 @@ Calibre (desktop)
 │   │   ├── profile/  upload-url/  rss-feed/
 │   │   ├── list-apps/  admin-apps/  admin-files/  admin-users/
 │   │   ├── reading-log/        # Books + reads CRUD
+│   │   ├── download-url/        # Presigned GET for gated files
 │   │   └── lt-proxy/           # LibraryThing API proxy
 │   └── shared/                 # Bundled into function zips by lambdas.tf
 │       ├── auth.mjs            # Cognito group parsing, requireEditor/requireAdmin
@@ -208,6 +210,29 @@ Configure and sign in under **Preferences → Plugins → Push to oldforest.net 
 See [`calibre-plugin/README.md`](calibre-plugin/README.md) for match/dedup rules, cover upload, tagging, and security notes.
 
 > The plugin uses its **own** Cognito app client. A newly created client needs a one-time Managed Login branding record or sign-in fails with *"Login pages unavailable"* — see [One-time post-deploy steps](#one-time-post-deploy-steps).
+
+---
+
+## File hosting and downloads
+
+Editors can upload a file and share a link, optionally requiring sign-in.
+
+| | Public | Sign-in required |
+|---|---|---|
+| S3 prefix | `files/` | `private/` |
+| Served by | CloudFront, cached | presigned URL, 2-minute expiry |
+| Link shape | `/files/…` | `/download.html?key=…` |
+| Bucket policy | readable by CloudFront | **not** readable by CloudFront |
+
+**Uploading.** In the post editor, *Insert download button* uploads a file and drops a Markdown link at the cursor; tick *Require sign-in* first for a gated file. `post.html` styles any link to `/files/…` or `/download.html?…` as a button, prefixed ⬇ or 🔒. The admin **Files** tab lists everything across `images/`, `files/` and `private/`, flags gated files, and copies the correct shareable link per file.
+
+**How gating works.** A plain `<a href>` cannot send an `Authorization` header, and tokens live in `sessionStorage` rather than cookies, so neither CloudFront nor S3 can see them. `/download.html` therefore reads the token in JS, calls `GET /v1/files/download` (JWT-gated), and forwards the browser to a short-lived presigned URL.
+
+Two independent layers keep `private/` closed: the bucket policy never grants CloudFront read access to it, and the `download-url` Lambda refuses to presign any key outside `private/` — so a bug in either alone is not enough to expose a file. Its IAM role is likewise scoped to `private/*` only.
+
+> Direct `/private/…` URLs return the site homepage rather than an error. That is the SPA 404 fallback, not a leak — the object is never fetched.
+
+Allowed upload types: images, `pdf`, `txt`, `md`, `csv`, `json`, `zip`, `gz`, `epub`, `mobi`, `azw3`. Content-Type is derived server-side from the extension, never from the caller, which keeps script-capable types (`.html`, `.svg`) off the site entirely.
 
 ---
 

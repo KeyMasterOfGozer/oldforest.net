@@ -144,6 +144,20 @@ resource "aws_cloudfront_distribution" "main" {
 
   # ── Cache Behaviors ────────────────────────────────────────────────────────
 
+  # /files/* → content bucket (cached) — public downloads.
+  # Release artifacts published to a stable key are overwritten in place, so
+  # scripts/publish-plugin.sh invalidates the specific path after uploading.
+  ordered_cache_behavior {
+    path_pattern     = "/files/*"
+    target_origin_id = "ContentS3Origin"
+
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
   # /images/* → content bucket (cached)
   ordered_cache_behavior {
     path_pattern     = "/images/*"

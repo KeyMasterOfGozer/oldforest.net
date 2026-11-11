@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download — Old Forest</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #0d1a0b;
+      --surface: #162414;
+      --border:  #2a3e20;
+      --text:    #e8d8b0;
+      --muted:   #859e6a;
+      --accent:  #78a84e;
+      --radius:  8px;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 40px; max-width: 460px; width: 100%;
+      text-align: center;
+    }
+    h1 { font-family: Georgia, serif; font-size: 22px; color: var(--accent); margin-bottom: 12px; }
+    p  { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 8px; }
+    .filename {
+      font-family: Menlo, Consolas, monospace; font-size: 14px;
+      color: var(--text); word-break: break-all; margin: 16px 0;
+    }
+    button, .btn {
+      display: inline-block; cursor: pointer; font-size: 14px; font-weight: 600;
+      border: none; border-radius: var(--radius); padding: 11px 22px;
+      background: var(--accent); color: #fff; text-decoration: none; margin-top: 18px;
+    }
+    button:hover, .btn:hover { opacity: .88; }
+    .btn-quiet { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .error { color: #e07060; }
+    .spinner {
+      width: 26px; height: 26px; margin: 0 auto 18px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    a.home { display: block; margin-top: 22px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="spinner"></div>
+  <p>Preparing your download…</p>
+</div>
+
+<script src="/js/util.js"></script>
+<script src="/js/auth.js"></script>
+<script>
+'use strict';
+
+const CFG = {
+  cognitoDomain: 'auth-165395066552.auth.us-east-1.amazoncognito.com',
+  clientId:      '71fv32ot0raceh7mt5lqgjvbto',
+  redirectUri:   'https://oldforest.net/index.html',
+  apiBase:       'https://oldforest.net',
+};
+
+// b64url/generatePKCE/parseJWT/pkceLogin/pkceLogout provided by /js/auth.js.
+// No exchangeCode here — redirectUri points at index.html, which performs the
+// code exchange and returns here via the return_to that pkceLogin stores.
+function login() { return pkceLogin(CFG); }
+
+const card = document.getElementById('card');
+
+function render(html) { card.innerHTML = html; }
+
+function showError(title, detail, opts = {}) {
+  render(`
+    <h1 class="error">${esc(title)}</h1>
+    <p>${esc(detail)}</p>
+    ${opts.signIn ? '<button id="btn-signin">Sign in</button>' : ''}
+    <a class="home" href="/">← Back to Old Forest</a>
+  `);
+  const btn = document.getElementById('btn-signin');
+  if (btn) btn.onclick = login;
+}
+
+async function main() {
+  const key = new URLSearchParams(window.location.search).get('key');
+  if (!key) {
+    return showError('No file specified', 'This download link is missing its file reference.');
+  }
+
+  const filename = key.split('/').pop() || 'file';
+  const token = sessionStorage.getItem('access_token');
+
+  if (!token) {
+    render(`
+      <h1>Sign in to download</h1>
+      <p>This file is only available to signed-in members.</p>
+      <div class="filename">${esc(filename)}</div>
+      <button id="btn-signin">Sign in</button>
+      <a class="home" href="/">← Back to Old Forest</a>
+    `);
+    document.getElementById('btn-signin').onclick = login;
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `${CFG.apiBase}/v1/files/download?key=${encodeURIComponent(key)}`,
+      { headers: { Authorization: `Bearer ${token}` } });
+
+    if (res.status === 401) {
+      // Expired or revoked mid-session — sending them back through sign-in is
+      // the only useful action, and login() preserves this page as return_to.
+      sessionStorage.removeItem('access_token');
+      return showError('Session expired',
+        'Please sign in again to download this file.', { signIn: true });
+    }
+    if (res.status === 404) {
+      return showError('File not found', 'This file may have been moved or removed.');
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return showError('Download unavailable',
+        body.message || `The server returned HTTP ${res.status}.`);
+    }
+
+    const data = await res.json();
+
+    // Show the link before navigating: the presigned URL is short-lived, and if
+    // the automatic redirect is blocked the user still has something to click.
+    render(`
+      <h1>Your download is ready</h1>
+      <div class="filename">${esc(data.filename || filename)}</div>
+      <p>Starting automatically…</p>
+      <a class="btn" href="${esc(data.url)}" download>Download now</a>
+      <a class="home" href="/">← Back to Old Forest</a>
+    `);
+    window.location.href = data.url;
+
+  } catch (e) {
+    showError('Download failed', e.message || 'Could not reach the server.');
+  }
+}
+
+main();
+</script>
+</body>
+</html>

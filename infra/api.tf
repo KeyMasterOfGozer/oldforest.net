@@ -266,6 +266,32 @@ resource "aws_apigatewayv2_route" "upload_url" {
   target             = "integrations/${aws_apigatewayv2_integration.upload_url.id}"
 }
 
+# ── download-url (gated file downloads) ───────────────────────────────────────
+resource "aws_lambda_permission" "download_url" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.download_url.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_integration" "download_url" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.download_url.invoke_arn
+  payload_format_version = "2.0"
+}
+
+# JWT-gated: being signed in is the whole point of this route. No group is
+# required beyond a valid token, matching "force the user to be logged in".
+resource "aws_apigatewayv2_route" "download_url" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /v1/files/download"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  target             = "integrations/${aws_apigatewayv2_integration.download_url.id}"
+}
+
 resource "aws_apigatewayv2_route" "list_admin_files" {
   api_id             = aws_apigatewayv2_api.main.id
   route_key          = "GET /v1/admin/files"

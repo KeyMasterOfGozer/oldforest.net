@@ -79,6 +79,24 @@ data "archive_file" "upload_url" {
     content  = file("${path.module}/../src/shared/auth.mjs")
     filename = "auth.mjs"
   }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
+  }
+}
+
+# ── download-url (presigned GET for gated files) ─────────────────────────────
+data "archive_file" "download_url" {
+  type        = "zip"
+  output_path = "${path.module}/.lambda-zips/download-url.zip"
+  source {
+    content  = file("${path.module}/../src/functions/download-url/index.mjs")
+    filename = "index.mjs"
+  }
+  source {
+    content  = file("${path.module}/../src/shared/http.mjs")
+    filename = "http.mjs"
+  }
 }
 
 data "archive_file" "admin_files" {
@@ -125,6 +143,9 @@ locals {
   common_env = {
     POSTS_TABLE    = aws_dynamodb_table.posts.name
     CONTENT_BUCKET = aws_s3_bucket.content.id
+    # Used to build public/download URLs returned to the admin and editor UIs,
+    # so the site's own hostname is never hard-coded in function source.
+    SITE_BASE_URL = "https://${var.domain_name}"
   }
 }
 
@@ -234,6 +255,22 @@ resource "aws_lambda_function" "upload_url" {
   memory_size      = local.lambda_memory
   filename         = data.archive_file.upload_url.output_path
   source_code_hash = data.archive_file.upload_url.output_base64sha256
+
+  environment {
+    variables = local.common_env
+  }
+}
+
+# ── download-url ──────────────────────────────────────────────────────────────
+resource "aws_lambda_function" "download_url" {
+  function_name    = "oldforest-download-url"
+  role             = aws_iam_role.download_url.arn
+  runtime          = local.lambda_runtime
+  handler          = local.lambda_handler
+  timeout          = local.lambda_timeout
+  memory_size      = local.lambda_memory
+  filename         = data.archive_file.download_url.output_path
+  source_code_hash = data.archive_file.download_url.output_base64sha256
 
   environment {
     variables = local.common_env

@@ -244,9 +244,17 @@
       <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:8px;">Attachments</label>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <button class="btn-secondary" id="btn-upload-file" type="button">⬆ Upload image / file</button>
+        <button class="btn-secondary" id="btn-insert-download" type="button">⬇ Insert download button</button>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;"
+               title="Gated files live outside the public CDN path and need a signed-in session to download.">
+          <input type="checkbox" id="download-gated"> Require sign-in
+        </label>
         <span id="upload-status" style="font-size:13px;color:var(--muted);"></span>
       </div>
-      <input type="file" id="file-upload-input" accept="image/*,.pdf,.txt,.md" style="display:none">
+      <input type="file" id="file-upload-input"
+             accept="image/*,.pdf,.txt,.md,.csv,.json,.zip,.gz,.epub,.mobi,.azw3" style="display:none">
+      <input type="file" id="download-upload-input"
+             accept=".pdf,.txt,.md,.csv,.json,.zip,.gz,.epub,.mobi,.azw3,image/*" style="display:none">
       <div id="uploaded-files" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
   </div>
@@ -268,7 +276,6 @@ const CFG = {
   clientId:       '71fv32ot0raceh7mt5lqgjvbto',
   redirectUri:    'https://oldforest.net/editor/index.html',
   apiBase:        'https://aijo86kijl.execute-api.us-east-1.amazonaws.com',
-  imagePublicBase: 'https://oldforest.net/images',
 };
 
 // ─────────────────────────────────────────────
@@ -389,17 +396,65 @@ async function deletePost(postId) {
   return apiFetch(`/v1/editor/posts/${postId}`, { method: 'DELETE' });
 }
 
-async function uploadImage(file) {
-  const { uploadUrl, key } = await apiFetch('/v1/editor/upload', {
+/**
+ * Upload a file and return the server's grant:
+ *   { key, contentType, access, publicUrl, downloadPath }
+ *
+ * kind:   'image' → images/ (public, shown inline)
+ *         'file'  → files/ (public) or private/ (needs sign-in to download)
+ * access: 'public' | 'private'  (ignored for images)
+ * stable: overwrite a fixed key so a published URL keeps pointing at the newest
+ *         upload — used for release artifacts, not general attachments.
+ */
+async function uploadFile(file, { kind = 'image', access = 'public', stable = false } = {}) {
+  const grant = await apiFetch('/v1/editor/upload', {
     method: 'POST',
-    body: JSON.stringify({ filename: file.name, contentType: file.type }),
+    body: JSON.stringify({ filename: file.name, size: file.size, kind, access, stable }),
   });
-  await fetch(uploadUrl, {
+
+  // The Content-Type header must match what the server signed, exactly. It is
+  // derived there from the file extension, which is not always what the browser
+  // reports in file.type (.md in particular), and a mismatch makes S3 reject
+  // the PUT with SignatureDoesNotMatch.
+  const res = await fetch(grant.uploadUrl, {
     method: 'PUT',
     body: file,
-    headers: { 'Content-Type': file.type },
+    headers: { 'Content-Type': grant.contentType },
   });
-  return `${CFG.imagePublicBase}/${key.replace('images/', '')}`;
+  if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
+
+  return grant;
+}
+
+async function uploadImage(file) {
+  const grant = await uploadFile(file, { kind: 'image' });
+  return grant.publicUrl;
+}
+
+/** Insert text at the caret, in EasyMDE or the plain-textarea fallback. */
+function insertAtCursor(text) {
+  if (easyMDE) {
+    easyMDE.codemirror.replaceSelection(text);
+    easyMDE.codemirror.focus();
+    return;
+  }
+  const ta = document.getElementById('f-content');
+  const pos = ta.selectionStart ?? ta.value.length;
+  ta.value = ta.value.slice(0, pos) + text + ta.value.slice(pos);
+}
+
+/** Add a click-to-copy chip to the attachments strip. */
+function addUploadChip(icon, name, url) {
+  const chip = document.createElement('span');
+  chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;';
+  chip.title = 'Click to copy URL';
+  chip.innerHTML = `${icon} ${esc(name)}`;
+  chip.onclick = () => {
+    navigator.clipboard.writeText(url)
+      .then(() => toast('URL copied!'))
+      .catch(() => toast('Copy failed — clipboard access denied', 'error'));
+  };
+  document.getElementById('uploaded-files').appendChild(chip);
 }
 
 // ─────────────────────────────────────────────
@@ -710,34 +765,54 @@ async function init() {
     const statusEl = document.getElementById('upload-status');
     statusEl.textContent = `Uploading ${file.name}…`;
     try {
-      const url = await uploadImage(file);
       const isImage = file.type.startsWith('image/');
-      const md = isImage ? `![${file.name}](${url})` : `[${file.name}](${url})`;
+      // Non-images go to files/ so they get a real download URL rather than
+      // sitting under the images/ prefix.
+      const grant = await uploadFile(file, { kind: isImage ? 'image' : 'file' });
+      const url = grant.publicUrl;
+      const md = isImage ? `![${file.name}](${url})` : `[${file.name}](${grant.downloadPath})`;
 
-      // Insert markdown at cursor (or at end if no editor)
-      if (easyMDE) {
-        easyMDE.codemirror.replaceSelection(md);
-        easyMDE.codemirror.focus();
-      } else {
-        const ta = document.getElementById('f-content');
-        const pos = ta.selectionStart ?? ta.value.length;
-        ta.value = ta.value.slice(0, pos) + md + ta.value.slice(pos);
-      }
-
-      // Add a chip to the uploaded-files list
-      const chip = document.createElement('span');
-      chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;';
-      chip.title = 'Click to copy URL';
-      chip.innerHTML = `${isImage ? '🖼' : '📄'} ${esc(file.name)}`;
-      chip.onclick = () => {
-        navigator.clipboard.writeText(url)
-          .then(() => toast('URL copied!'))
-          .catch(() => toast('Copy failed — clipboard access denied', 'error'));
-      };
-      document.getElementById('uploaded-files').appendChild(chip);
+      insertAtCursor(md);
+      addUploadChip(isImage ? '🖼' : '📄', file.name, url);
 
       statusEl.textContent = '';
       toast('Uploaded — markdown inserted');
+    } catch (err) {
+      statusEl.textContent = '';
+      toast(`Upload failed: ${err.message}`, 'error');
+    }
+  });
+
+  // ── Insert download button ───────────────────
+  document.getElementById('btn-insert-download').onclick = () =>
+    document.getElementById('download-upload-input').click();
+
+  document.getElementById('download-upload-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+
+    const gated = document.getElementById('download-gated').checked;
+    const statusEl = document.getElementById('upload-status');
+    statusEl.textContent = `Uploading ${file.name}…`;
+    try {
+      const grant = await uploadFile(file, {
+        kind: 'file',
+        access: gated ? 'private' : 'public',
+      });
+
+      // A plain Markdown link — post.html styles anything pointing at /files/
+      // or /download.html as a button, and prefixes ⬇ or 🔒 automatically, so
+      // no raw HTML has to survive the sanitiser.
+      insertAtCursor(`\n[Download ${file.name}](${grant.downloadPath})\n`);
+      // Gated files have no public URL, so the chip copies the download-page
+      // link — which is what you would actually share.
+      addUploadChip(gated ? '🔒' : '⬇', file.name,
+                    grant.publicUrl || `${window.location.origin}${grant.downloadPath}`);
+
+      statusEl.textContent = '';
+      toast(gated ? 'Uploaded — sign-in required to download'
+                  : 'Uploaded — public download button inserted');
     } catch (err) {
       statusEl.textContent = '';
       toast(`Upload failed: ${err.message}`, 'error');
