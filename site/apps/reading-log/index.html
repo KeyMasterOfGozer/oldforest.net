@@ -139,7 +139,15 @@
     .gb-source-badge { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px; flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
     .badge-ol  { background: #1a3460; color: #aaccff; border: 1px solid #5588cc; }
     .badge-gb  { background: #1a3828; color: #88ddaa; border: 1px solid #44aa66; }
-    .gb-result.no-id { opacity: 0.5; }
+    .gb-result.no-id { opacity: 0.55; }
+    .gb-result.no-id:hover { opacity: 0.85; }
+    .gb-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .gb-idline { font-size: 11px; font-weight: 600; margin-top: 2px; }
+    .gb-idline.has-id { color: #7fd18b; }
+    .gb-idline.no-id-text { color: var(--muted); font-weight: 400; font-style: italic; }
+    .gb-idline a { color: inherit; }
+    .search-summary { font-size: 12px; color: var(--muted); padding: 2px 2px 4px; }
+    .search-summary strong { color: var(--text); }
     /* ── External link badges ── */
     .book-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .book-link-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
@@ -962,39 +970,136 @@ function isbn13ToIsbn10(isbn13) {
   return core + (check === 10 ? 'X' : String(check));
 }
 
-// Score an OL result for how well it can supply an Amazon ASIN.
-// 2 = has a Kindle B-code; 1 = has or can derive an ISBN-10; 0 = nothing.
-function amzScore(doc) {
-  if ((doc.id_amazon ?? []).some(x => /^B/i.test(x))) return 2;
-  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13 && x.startsWith('978')) ?? '';
-  if ((doc.id_amazon ?? []).some(x => /^\d{9}[\dX]$/i.test(x)) || isbn13) return 1;
-  return 0;
+// Pick the best Amazon ASIN an OL result can supply, and say where it came from.
+//   kindle  — a Kindle B-code Open Library has linked to Amazon (works).
+//   ol      — an ISBN-10 Open Library has linked to Amazon (works).
+//   derived — an ISBN-10 converted from the record's ISBN-13. Only a guess: Amazon has
+//             no page for many editions (publisher-direct or overseas printings), so
+//             /dp/<guess> can land on "Sorry, we couldn't find that page".
+function amzPick(doc) {
+  const ids    = doc.id_amazon ?? [];
+  const bCode  = ids.find(x => /^B/i.test(x));
+  if (bCode) return { id: bCode, kind: 'kindle' };
+  const olIsbn = ids.find(x => /^\d{9}[\dX]$/i.test(x));
+  if (olIsbn) return { id: olIsbn, kind: 'ol' };
+  const isbns  = doc.isbn ?? [];
+  const isbn13 = isbns.find(x => x.length === 13 && x.startsWith('978')) ?? '';
+  const isbn10 = isbns.find(x => /^\d{9}[\dX]$/i.test(x)) ?? '';
+  const guess  = isbn13ToIsbn10(isbn13) || isbn10;
+  if (guess) return { id: guess, kind: 'derived', from: isbn13 || isbn10 };
+  return { id: '', kind: null };
 }
 
-// Amazon: searches OpenLibrary requesting the id_amazon identifier field.
+// Sort key: Kindle → OL-linked ISBN-10 → guessed ISBN-10 → nothing.
+function amzScore(doc) {
+  return { kindle: 3, ol: 2, derived: 1 }[amzPick(doc).kind] ?? 0;
+}
+
+const normIsbn = s => (s ?? '').replace(/[^0-9Xx]/g, '').toUpperCase();
+
+// True when a result carries the given ISBN (10 or 13 digits, either form).
+function hasIsbn(doc, isbn) {
+  if (!isbn) return false;
+  const all = new Set();
+  for (const x of doc.isbn ?? []) { all.add(x); if (x.length === 13) all.add(isbn13ToIsbn10(x)); }
+  return all.has(isbn) || (isbn.length === 13 && all.has(isbn13ToIsbn10(isbn)));
+}
+
+const LANG_NAMES = { eng: 'English', spa: 'Spanish', fre: 'French', ger: 'German', ita: 'Italian',
+                     por: 'Portuguese', dut: 'Dutch', pol: 'Polish', rus: 'Russian', jpn: 'Japanese' };
+
+// Turn one OL edition record into a search-result row shaped like an OL search doc.
+function editionToRow(work, ed) {
+  return {
+    _source: 'amz',
+    _edition: true,
+    key:      work.key,
+    title:    ed.title || work.title,
+    author_name: work.author_name,
+    isbn:     [...(ed.isbn_13 ?? []), ...(ed.isbn_10 ?? [])],
+    cover_i:  (ed.covers ?? []).find(c => c > 0) ?? work.cover_i,
+    number_of_pages_median: ed.number_of_pages ?? work.number_of_pages_median,
+    id_amazon: ed.identifiers?.amazon ?? [],
+    publisher: ed.publishers ?? [],
+    first_publish_year: work.first_publish_year,
+    _format:  ed.physical_format ?? '',
+    _date:    ed.publish_date ?? '',
+    _langs:   (ed.languages ?? []).map(l => (l.key ?? '').split('/').pop()).filter(Boolean),
+  };
+}
+
+// Amazon: Open Library has no Amazon search, so this finds the book on OL by title + author,
+// then lists each matching work's individual editions (hardcover, UK printing, paperback…),
+// because one work bundles several printings and Amazon sells some of them and not others.
 // Amazon ASINs come in two flavours:
 //   • B-code  (e.g. B008PE3UH8) — Kindle / digital editions; OL has these occasionally.
-//   • ISBN-10 (e.g. 0441013597) — physical editions; OL has these more reliably,
-//     and we can also derive one from any ISBN-13 the record carries.
-// Sorting: B-code first → derivable ISBN-10 → nothing.
+//   • ISBN-10 (e.g. 0441013597) — physical editions.
+// Only IDs Open Library has linked to Amazon are trusted; one derived from an ISBN-13 is
+// shown as a guess and the row is dimmed. The edition matching the form's ISBN is marked
+// and listed first among the guesses; if OL doesn't know that ISBN it gets a row of its own.
 async function searchAmazon(title, author, container) {
   const params = new URLSearchParams({
-    limit: '12',
-    fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,id_amazon',
+    limit: '8',
+    fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,id_amazon,first_publish_year,publisher',
   });
   if (title)  params.set('title',  title);
   if (author) params.set('author', author);
 
-  const res  = await fetch(`https://openlibrary.org/search.json?${params}`);
-  const data = await res.json();
-  let items = (data.docs ?? []).map(d => ({ ...d, _source: 'amz' }));
-  items.sort((a, b) => amzScore(b) - amzScore(a));
+  const res   = await fetch(`https://openlibrary.org/search.json?${params}`);
+  const data  = await res.json();
+  const works = data.docs ?? [];
+
+  // Expand each work into its editions. A failed or empty lookup keeps the work-level row.
+  const edLists = await Promise.all(works.map(w =>
+    fetch(`https://openlibrary.org${w.key}/editions.json?limit=50`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.entries ?? [])
+      .catch(() => [])));
+
+  let items = [];
+  works.forEach((w, i) => {
+    const rows = edLists[i].map(ed => editionToRow(w, ed)).filter(r => amzPick(r).kind);
+    items.push(...(rows.length ? rows : [{ ...w, _source: 'amz' }]));
+  });
+
+  // One row per Amazon ID.
+  const seen = new Set();
+  items = items.filter(d => {
+    const id = amzPick(d).id || `work:${d.key}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  // The ISBN already in the form is most likely the reader's own edition.
+  const formIsbn = normIsbn(document.getElementById('f-isbn').value);
+  if (formIsbn) {
+    items.forEach(d => { d._fromForm = hasIsbn(d, formIsbn); });
+    if (!items.some(d => d._fromForm) && (formIsbn.length === 10 || formIsbn.length === 13)) {
+      items.push({ _source: 'amz', _fromForm: true, _formOnly: true,
+                   title: title || '', author_name: author ? [author] : [], isbn: [formIsbn] });
+    }
+  }
+
+  const isEnglish = d => !d._langs?.length || d._langs.includes('eng');
+  items.sort((a, b) =>
+    (amzScore(b) - amzScore(a)) ||
+    ((b._fromForm ? 1 : 0) - (a._fromForm ? 1 : 0)) ||
+    ((isEnglish(b) ? 1 : 0) - (isEnglish(a) ? 1 : 0)));
+  items = items.slice(0, 20);
 
   if (!items.length) {
     container.innerHTML = '<div style="color:var(--muted);padding:8px">No results found.</div>';
     return;
   }
-  renderSearchResults(items, container);
+  const linked = items.filter(d => amzScore(d) >= 2).length;
+  const n      = `${items.length} edition${items.length === 1 ? '' : 's'}`;
+  const summary = linked === items.length
+    ? `All <strong>${n}</strong> have an Amazon ID from Open Library.`
+    : linked > 0
+      ? `<strong>${linked}</strong> of ${n} have an Amazon ID from Open Library (listed first). Dimmed ones only have a guessed ID or none.`
+      : `None of these ${n} have an Amazon ID on Open Library. Each dimmed ID is guessed from that edition's ISBN, and Amazon doesn't sell every edition. Click an ID to check it, or use <strong>🔍 Search Amazon</strong> below.`;
+  renderSearchResults(items, container, summary);
 }
 
 // Goodreads: searches OpenLibrary requesting the id_goodreads external identifier field.
@@ -1003,7 +1108,7 @@ async function searchAmazon(title, author, container) {
 async function searchGoodreads(title, author, container) {
   const params = new URLSearchParams({
     limit: '12',
-    fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,id_goodreads',
+    fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,id_goodreads,first_publish_year,edition_count',
   });
   if (title)  params.set('title',  title);
   if (author) params.set('author', author);
@@ -1018,11 +1123,18 @@ async function searchGoodreads(title, author, container) {
     container.innerHTML = '<div style="color:var(--muted);padding:8px">No results found.</div>';
     return;
   }
-  renderSearchResults(items, container);
+  const withId = items.filter(d => (d.id_goodreads ?? []).length > 0).length;
+  const summary = withId === items.length
+    ? `All <strong>${items.length}</strong> results have a Goodreads ID on Open Library.`
+    : withId > 0
+      ? `<strong>${withId}</strong> of ${items.length} results have a Goodreads ID (listed first). Dimmed ones will fill in metadata only.`
+      : `None of these ${items.length} results have a Goodreads ID on Open Library. Picking one fills in metadata only; use <strong>🔍 Search GoodReads</strong> below to find the book and paste its URL.`;
+  renderSearchResults(items, container, summary);
 }
 
-function renderSearchResults(items, container) {
-  container.innerHTML = items.map((doc, i) => {
+function renderSearchResults(items, container, summaryHtml = '') {
+  const summary = summaryHtml ? `<div class="search-summary">${summaryHtml}</div>` : '';
+  container.innerHTML = summary + items.map((doc, i) => {
     let auth, thumb, titleText, hasId = false, amzLabel = 'AMZ';
     if (doc._source === 'gb') {
       const info = doc.volumeInfo ?? {};
@@ -1041,9 +1153,9 @@ function renderSearchResults(items, container) {
       thumb     = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '';
       titleText = doc.title ?? '';
       if (doc._source === 'amz') {
-        const score = amzScore(doc);
-        hasId       = score > 0;
-        amzLabel    = score === 2 ? 'AMZ ✓' : 'AMZ';
+        const kind = amzPick(doc).kind;
+        hasId      = kind === 'kindle' || kind === 'ol';
+        amzLabel   = hasId ? 'AMZ ✓' : kind === 'derived' ? 'AMZ ?' : 'AMZ';
       }
       if (doc._source === 'gr')  hasId = (doc.id_goodreads ?? []).length > 0;
     }
@@ -1058,11 +1170,46 @@ function renderSearchResults(items, container) {
     };
     const [badgeClass, badgeLabel] = badges[doc._source] ?? ['badge-ol', '?'];
     const dimClass = (!hasId && (doc._source === 'amz' || doc._source === 'gr')) ? ' no-id' : '';
+    let extraHtml = '';
+    if (doc._source === 'gr') {
+      const meta = [
+        doc.first_publish_year ? `First published ${doc.first_publish_year}` : '',
+        doc.edition_count ? `${doc.edition_count} edition${doc.edition_count === 1 ? '' : 's'}` : '',
+        (doc.isbn ?? []).find(x => x.length === 13) ?? '',
+      ].filter(Boolean).join(' · ');
+      const grIds = doc.id_goodreads ?? [];
+      const idLine = grIds.length
+        ? `<div class="gb-idline has-id">✓ Goodreads ID <a href="https://www.goodreads.com/book/show/${encodeURIComponent(grIds[0])}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Goodreads to check it">${esc(grIds[0])}</a></div>`
+        : `<div class="gb-idline no-id-text">No Goodreads ID on Open Library</div>`;
+      extraHtml = (meta ? `<div class="gb-meta">${esc(meta)}</div>` : '') + idLine;
+    } else if (doc._source === 'amz') {
+      const pick = amzPick(doc);
+      const pubs = doc.publisher ?? [];
+      const otherLangs = (doc._langs ?? []).filter(l => l !== 'eng').map(l => LANG_NAMES[l] ?? l);
+      const meta = doc._formOnly
+        ? 'From the ISBN field (Open Library has no record of it)'
+        : [
+            doc._fromForm ? 'Matches your ISBN' : '',
+            doc._format ? doc._format[0].toUpperCase() + doc._format.slice(1) : '',
+            pubs.length === 1 ? pubs[0] : pubs.length > 1 ? `${pubs.length} publishers` : '',
+            doc._edition ? (doc._date ?? '') : (doc.first_publish_year ? `First published ${doc.first_publish_year}` : ''),
+            otherLangs.join(', '),
+          ].filter(Boolean).join(' · ');
+      const idLink = pick.id
+        ? `<a href="https://www.amazon.com/dp/${encodeURIComponent(pick.id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Amazon to check it">${esc(pick.id)}</a>`
+        : '';
+      const idLine = pick.kind === 'kindle' ? `<div class="gb-idline has-id">✓ Kindle ASIN ${idLink}</div>`
+                   : pick.kind === 'ol'     ? `<div class="gb-idline has-id">✓ Amazon ID ${idLink} (ISBN-10)</div>`
+                   : pick.kind === 'derived'? `<div class="gb-idline no-id-text">Guessed ID ${idLink} from ISBN ${esc(pick.from)}. May not be on Amazon.</div>`
+                   :                          `<div class="gb-idline no-id-text">No Amazon ID or ISBN on Open Library</div>`;
+      extraHtml = (meta ? `<div class="gb-meta">${esc(meta)}</div>` : '') + idLine;
+    }
     return `<div class="gb-result${dimClass}" onclick="applySearchResult(${i})" data-i="${i}">
       ${imgHtml}
       <div class="gb-info">
         <div class="gb-title">${esc(titleText)}</div>
         <div class="gb-author">${esc(auth)}</div>
+        ${extraHtml}
       </div>
       <span class="gb-source-badge ${badgeClass}">${badgeLabel}</span>
     </div>`;
@@ -1148,16 +1295,14 @@ function applyGBResult(doc) {
 }
 
 function applyAmazonResult(doc) {
-  const fields    = extractOLFields(doc);
-  // Priority: Kindle B-code → ISBN-10 from OL → ISBN-10 derived from ISBN-13
-  const bCode     = (doc.id_amazon ?? []).find(x => /^B/i.test(x)) ?? '';
-  const isbn10raw = (doc.id_amazon ?? []).find(x => /^\d{9}[\dX]$/i.test(x)) ?? '';
-  const isbn10    = bCode || isbn10raw || isbn13ToIsbn10(fields.isbn13);
-  applyFieldsToForm({ ...fields, amazonId: isbn10 });
-  const msg = bCode      ? `Applied + Kindle ASIN ${bCode}.`
-            : isbn10raw  ? `Applied + physical ASIN ${isbn10raw} (ISBN-10).`
-            : isbn10     ? `Applied + physical ASIN ${isbn10} (derived from ISBN-13).`
-            : 'Applied metadata — no Amazon ID found for this edition.';
+  const fields = extractOLFields(doc);
+  // Priority: Kindle B-code → ISBN-10 from OL → ISBN-10 derived from ISBN-13 (a guess)
+  const pick   = amzPick(doc);
+  applyFieldsToForm({ ...fields, amazonId: pick.id });
+  const msg = pick.kind === 'kindle'  ? `Applied + Kindle ASIN ${pick.id}.`
+            : pick.kind === 'ol'      ? `Applied + Amazon ID ${pick.id} (ISBN-10).`
+            : pick.kind === 'derived' ? `Applied guessed Amazon ID ${pick.id}. If 🛒 Amazon below can't find it, use 🔍 Search Amazon.`
+            : 'Applied metadata. No Amazon ID found; use 🔍 Search Amazon below.';
   toast(msg);
 }
 
@@ -1166,7 +1311,9 @@ function applyGoodreadsResult(doc) {
   const grId   = (doc.id_goodreads ?? [])[0] ?? '';
   const grUrl  = grId ? `https://www.goodreads.com/book/show/${grId}` : '';
   applyFieldsToForm({ ...fields, goodreadsUrl: grUrl });
-  toast(grUrl ? 'Applied metadata + Goodreads URL.' : 'Applied metadata (no Goodreads ID found).');
+  toast(grUrl
+    ? 'Applied metadata + Goodreads URL.'
+    : 'Applied metadata. No Goodreads ID on Open Library; use 🔍 Search GoodReads below to find it.');
 }
 
 // ── Link badges ───────────────────────────────────────────────────────────────
@@ -1207,19 +1354,32 @@ function updateBookLinksFromValues({ openLibraryId, googleBooksId, amazonId, roy
     links.push(`<a class="book-link-badge badge-gb" href="https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}" target="_blank">📗 Google Books</a>`);
   }
   if (amazonId) {
-    links.push(`<a class="book-link-badge badge-amz" href="https://www.amazon.com/dp/${encodeURIComponent(amazonId)}" target="_blank">🛒 Amazon</a>`);
-  } else {
-    const amzQ = encodeURIComponent((title + ' ' + author).trim());
-    links.push(`<a class="book-link-badge badge-amz" href="https://www.amazon.com/s?k=${amzQ}&i=stripbooks" target="_blank">🔍 Search Amazon</a>`);
+    links.push(`<a class="book-link-badge badge-amz" href="https://www.amazon.com/dp/${encodeURIComponent(amazonId)}" target="_blank" rel="noopener">🛒 Amazon</a>`);
+  }
+  // A Kindle B-code is a real Amazon page. An ISBN-10 may be a guess for an edition Amazon
+  // doesn't sell, so keep the search link alongside it as a fallback.
+  if (!/^B/i.test(amazonId ?? '')) {
+    const amzQ = `${title ?? ''} ${author ?? ''}`.trim();
+    if (amzQ) {
+      links.push(`<a class="book-link-badge badge-amz" href="https://www.amazon.com/s?k=${encodeURIComponent(amzQ)}&i=stripbooks" target="_blank" rel="noopener">🔍 Search Amazon</a>`);
+    }
   }
   if (royalRoadId) {
     links.push(`<a class="book-link-badge badge-rr" href="https://www.royalroad.com/fiction/${encodeURIComponent(royalRoadId)}" target="_blank">👑 Royal Road</a>`);
   }
   if (goodreadsUrl) {
     links.push(`<a class="book-link-badge badge-gr" href="${esc(goodreadsUrl)}" target="_blank">⭐ Goodreads</a>`);
-  } else if (isbn || title) {
-    const grQ = isbn ? `isbn:${isbn}` : `${title} ${author}`;
-    links.push(`<a class="book-link-badge badge-gr" href="https://www.goodreads.com/search?q=${encodeURIComponent(grQ)}" target="_blank">🔍 Search GoodReads</a>`);
+  } else {
+    // Goodreads search takes plain text or a bare ISBN (no "isbn:" prefix). Title + author is
+    // the reliable search; the ISBN link is a shortcut that jumps straight to the book when
+    // Goodreads has that exact edition.
+    const grTitleQ = `${title ?? ''} ${author ?? ''}`.trim();
+    if (grTitleQ) {
+      links.push(`<a class="book-link-badge badge-gr" href="https://www.goodreads.com/search?q=${encodeURIComponent(grTitleQ)}" target="_blank" rel="noopener">🔍 Search GoodReads</a>`);
+    }
+    if (isbn) {
+      links.push(`<a class="book-link-badge badge-gr" href="https://www.goodreads.com/search?q=${encodeURIComponent(isbn)}" target="_blank" rel="noopener" title="Finds the book only if Goodreads has this exact edition">🔍 GoodReads by ISBN</a>`);
+    }
   }
 
   const row = document.getElementById('book-links-row');
