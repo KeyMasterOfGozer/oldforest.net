@@ -357,7 +357,11 @@
     <div class="panel-box" id="reads-section">
       <div class="panel-header">
         <h2>Reading History</h2>
-        <button class="btn-primary btn-sm" id="btn-add-read">+ Log a Read</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-primary btn-sm" id="btn-start-reading"
+                  title="Start reading this book today: tag it current, drop 'to read', log a new read, and finish off whatever was current before.">▶ Start Reading</button>
+          <button class="btn-outline btn-sm" id="btn-add-read">+ Log a Read</button>
+        </div>
       </div>
 
       <div id="reads-table-wrap">
@@ -432,6 +436,7 @@
 <div id="toast"></div>
 
 <script src="/js/util.js"></script>
+<script src="/js/reading-workflow.js"></script>
 <script>
 'use strict';
 
@@ -549,11 +554,37 @@ async function api(method, path, body) {
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(CFG.apiBase + path, opts);
+
+  // A 401 means the session is genuinely gone — expired past the refresh
+  // window, or revoked server-side (a global sign-out kills refresh tokens
+  // while already-issued access tokens simply age out). Clear it and say so
+  // plainly rather than surfacing a bare status code.
+  if (res.status === 401) {
+    accessToken = null;
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('refresh_token');
+    throw new Error('Your session expired — sign in again and retry.');
+  }
+  if (res.status === 403) {
+    throw new Error('Your account is not in the editors group.');
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${res.status}: ${text}`);
   }
   return res.json();
+}
+
+/**
+ * True when we still hold a usable session.
+ *
+ * Called before any multi-write action so a dead session fails *before*
+ * anything is mutated, rather than part-way through. maybeRefreshToken()
+ * clears the token when a refresh fails, so a null here is authoritative.
+ */
+async function hasLiveSession() {
+  await maybeRefreshToken();
+  return Boolean(accessToken);
 }
 
 // ── Toast ────────────────────────────────────────────────────────────────────
@@ -1463,6 +1494,114 @@ function closeReadForm() {
 document.getElementById('btn-add-read').addEventListener('click', () => {
   editingReadId = null;
   openReadForm(true);
+});
+
+// ── Start Reading ────────────────────────────────────────────────────────────
+// One click for the common "finished that, starting this" move. The decision
+// logic is in /js/reading-workflow.js (pure + unit-tested); this only renders
+// the confirmation and performs the writes the plan describes.
+
+/** Today as YYYY-MM-DD in the user's own timezone, matching <input type="date">. */
+function todayLocalISO() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function describeStartReadingPlan(plan) {
+  const lines = [`Start reading "${plan.start.title}"?`, ''];
+
+  const startBits = [];
+  if (plan.start.addedCurrent)   startBits.push(`tag it "${CURRENT_TAG}"`);
+  if (plan.start.droppedToRead)  startBits.push(`remove "${TO_READ_TAG}"`);
+  if (plan.start.createRead)     startBits.push(`log a new read started ${plan.today}`);
+  if (plan.start.backfillStartedReadId) startBits.push(`set its start date to ${plan.today}`);
+  if (startBits.length) {
+    lines.push('This book:');
+    startBits.forEach(b => lines.push(`  • ${b}`));
+  }
+
+  if (plan.close.length) {
+    lines.push('', 'Finishing off:');
+    plan.close.forEach(c => {
+      const n = c.finishReadIds.length;
+      const dated = n
+        ? `set finish date ${plan.today}${n > 1 ? ` on ${n} reads` : ''}`
+        : 'no unfinished read to date';
+      lines.push(`  • "${c.title}" — remove "${CURRENT_TAG}", ${dated}`);
+    });
+  }
+
+  if (plan.warnings.length) {
+    lines.push('', 'Note:');
+    plan.warnings.forEach(w => lines.push(`  ! ${w}`));
+  }
+
+  lines.push('', `${plan.writes} change${plan.writes === 1 ? '' : 's'} in total.`);
+  return lines.join('\n');
+}
+
+async function applyStartReadingPlan(plan) {
+  // Close out the previous book(s) first, so a failure part-way through never
+  // leaves two books tagged current.
+  for (const entry of plan.close) {
+    for (const readId of entry.finishReadIds) {
+      await api('PUT', `/v1/reading/reads/${encodeURIComponent(readId)}`,
+                { finished: plan.today });
+    }
+    await api('PUT', `/v1/reading/books/${encodeURIComponent(entry.bookId)}`,
+              { tags: entry.tagsAfter });
+  }
+
+  if (plan.start.tagsChanged) {
+    await api('PUT', `/v1/reading/books/${encodeURIComponent(plan.start.bookId)}`,
+              { tags: plan.start.tagsAfter });
+  }
+  if (plan.start.backfillStartedReadId) {
+    await api('PUT', `/v1/reading/reads/${encodeURIComponent(plan.start.backfillStartedReadId)}`,
+              { started: plan.today });
+  }
+  if (plan.start.createRead) {
+    await api('POST', '/v1/reading/reads',
+              { bookId: plan.start.bookId, started: plan.today });
+  }
+}
+
+document.getElementById('btn-start-reading').addEventListener('click', async () => {
+  if (!selectedBook) return;
+  const btn = document.getElementById('btn-start-reading');
+  btn.disabled = true;
+  try {
+    // Check auth up front. This action writes to several records, and the read
+    // endpoints are public — so without this the first *write* is where a dead
+    // session surfaces, after the confirmation has already been accepted.
+    if (!await hasLiveSession()) {
+      toast('Your session expired — sign in again, then retry.', true);
+      return;
+    }
+
+    // Needs every read, not just this book's — the plan has to find unfinished
+    // reads belonging to whatever is currently tagged 'current'.
+    const { reads } = await api('GET', '/v1/reading/reads');
+    const plan = planStartReading(selectedBook, allBooks, reads, todayLocalISO());
+
+    if (plan.isNoop) {
+      toast('Already current with a read in progress — nothing to change.');
+      return;
+    }
+    if (!confirm(describeStartReadingPlan(plan))) return;
+
+    await applyStartReadingPlan(plan);
+    await loadBooks();
+    await selectBook(plan.start.bookId);
+    toast(plan.close.length
+      ? `Started "${plan.start.title}"; finished ${plan.close.length} book${plan.close.length === 1 ? '' : 's'}.`
+      : `Started "${plan.start.title}".`);
+  } catch (e) {
+    toast('Start reading failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 document.getElementById('btn-cancel-read').addEventListener('click', closeReadForm);
