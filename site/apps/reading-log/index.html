@@ -982,9 +982,11 @@ function amzPick(doc) {
   if (bCode) return { id: bCode, kind: 'kindle' };
   const olIsbn = ids.find(x => /^\d{9}[\dX]$/i.test(x));
   if (olIsbn) return { id: olIsbn, kind: 'ol' };
-  const isbn13 = (doc.isbn ?? []).find(x => x.length === 13 && x.startsWith('978')) ?? '';
-  const guess  = isbn13ToIsbn10(isbn13);
-  if (guess) return { id: guess, kind: 'derived', isbn13 };
+  const isbns  = doc.isbn ?? [];
+  const isbn13 = isbns.find(x => x.length === 13 && x.startsWith('978')) ?? '';
+  const isbn10 = isbns.find(x => /^\d{9}[\dX]$/i.test(x)) ?? '';
+  const guess  = isbn13ToIsbn10(isbn13) || isbn10;
+  if (guess) return { id: guess, kind: 'derived', from: isbn13 || isbn10 };
   return { id: '', kind: null };
 }
 
@@ -993,35 +995,110 @@ function amzScore(doc) {
   return { kindle: 3, ol: 2, derived: 1 }[amzPick(doc).kind] ?? 0;
 }
 
-// Amazon: searches OpenLibrary requesting the id_amazon identifier field.
+const normIsbn = s => (s ?? '').replace(/[^0-9Xx]/g, '').toUpperCase();
+
+// True when a result carries the given ISBN (10 or 13 digits, either form).
+function hasIsbn(doc, isbn) {
+  if (!isbn) return false;
+  const all = new Set();
+  for (const x of doc.isbn ?? []) { all.add(x); if (x.length === 13) all.add(isbn13ToIsbn10(x)); }
+  return all.has(isbn) || (isbn.length === 13 && all.has(isbn13ToIsbn10(isbn)));
+}
+
+const LANG_NAMES = { eng: 'English', spa: 'Spanish', fre: 'French', ger: 'German', ita: 'Italian',
+                     por: 'Portuguese', dut: 'Dutch', pol: 'Polish', rus: 'Russian', jpn: 'Japanese' };
+
+// Turn one OL edition record into a search-result row shaped like an OL search doc.
+function editionToRow(work, ed) {
+  return {
+    _source: 'amz',
+    _edition: true,
+    key:      work.key,
+    title:    ed.title || work.title,
+    author_name: work.author_name,
+    isbn:     [...(ed.isbn_13 ?? []), ...(ed.isbn_10 ?? [])],
+    cover_i:  (ed.covers ?? []).find(c => c > 0) ?? work.cover_i,
+    number_of_pages_median: ed.number_of_pages ?? work.number_of_pages_median,
+    id_amazon: ed.identifiers?.amazon ?? [],
+    publisher: ed.publishers ?? [],
+    first_publish_year: work.first_publish_year,
+    _format:  ed.physical_format ?? '',
+    _date:    ed.publish_date ?? '',
+    _langs:   (ed.languages ?? []).map(l => (l.key ?? '').split('/').pop()).filter(Boolean),
+  };
+}
+
+// Amazon: Open Library has no Amazon search, so this finds the book on OL by title + author,
+// then lists each matching work's individual editions (hardcover, UK printing, paperback…),
+// because one work bundles several printings and Amazon sells some of them and not others.
 // Amazon ASINs come in two flavours:
 //   • B-code  (e.g. B008PE3UH8) — Kindle / digital editions; OL has these occasionally.
 //   • ISBN-10 (e.g. 0441013597) — physical editions.
 // Only IDs Open Library has linked to Amazon are trusted; one derived from an ISBN-13 is
-// shown as a guess and the result is dimmed.
+// shown as a guess and the row is dimmed. The edition matching the form's ISBN is marked
+// and listed first among the guesses; if OL doesn't know that ISBN it gets a row of its own.
 async function searchAmazon(title, author, container) {
   const params = new URLSearchParams({
-    limit: '12',
+    limit: '8',
     fields: 'key,title,author_name,isbn,cover_i,number_of_pages_median,id_amazon,first_publish_year,publisher',
   });
   if (title)  params.set('title',  title);
   if (author) params.set('author', author);
 
-  const res  = await fetch(`https://openlibrary.org/search.json?${params}`);
-  const data = await res.json();
-  let items = (data.docs ?? []).map(d => ({ ...d, _source: 'amz' }));
-  items.sort((a, b) => amzScore(b) - amzScore(a));
+  const res   = await fetch(`https://openlibrary.org/search.json?${params}`);
+  const data  = await res.json();
+  const works = data.docs ?? [];
+
+  // Expand each work into its editions. A failed or empty lookup keeps the work-level row.
+  const edLists = await Promise.all(works.map(w =>
+    fetch(`https://openlibrary.org${w.key}/editions.json?limit=50`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.entries ?? [])
+      .catch(() => [])));
+
+  let items = [];
+  works.forEach((w, i) => {
+    const rows = edLists[i].map(ed => editionToRow(w, ed)).filter(r => amzPick(r).kind);
+    items.push(...(rows.length ? rows : [{ ...w, _source: 'amz' }]));
+  });
+
+  // One row per Amazon ID.
+  const seen = new Set();
+  items = items.filter(d => {
+    const id = amzPick(d).id || `work:${d.key}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  // The ISBN already in the form is most likely the reader's own edition.
+  const formIsbn = normIsbn(document.getElementById('f-isbn').value);
+  if (formIsbn) {
+    items.forEach(d => { d._fromForm = hasIsbn(d, formIsbn); });
+    if (!items.some(d => d._fromForm) && (formIsbn.length === 10 || formIsbn.length === 13)) {
+      items.push({ _source: 'amz', _fromForm: true, _formOnly: true,
+                   title: title || '', author_name: author ? [author] : [], isbn: [formIsbn] });
+    }
+  }
+
+  const isEnglish = d => !d._langs?.length || d._langs.includes('eng');
+  items.sort((a, b) =>
+    (amzScore(b) - amzScore(a)) ||
+    ((b._fromForm ? 1 : 0) - (a._fromForm ? 1 : 0)) ||
+    ((isEnglish(b) ? 1 : 0) - (isEnglish(a) ? 1 : 0)));
+  items = items.slice(0, 20);
 
   if (!items.length) {
     container.innerHTML = '<div style="color:var(--muted);padding:8px">No results found.</div>';
     return;
   }
   const linked = items.filter(d => amzScore(d) >= 2).length;
+  const n      = `${items.length} edition${items.length === 1 ? '' : 's'}`;
   const summary = linked === items.length
-    ? `All <strong>${items.length}</strong> results have an Amazon ID from Open Library.`
+    ? `All <strong>${n}</strong> have an Amazon ID from Open Library.`
     : linked > 0
-      ? `<strong>${linked}</strong> of ${items.length} results have an Amazon ID from Open Library (listed first). Dimmed ones only have a guessed ID or none.`
-      : `None of these ${items.length} results have an Amazon ID on Open Library. A dimmed result's ID is guessed from its ISBN and may not exist on Amazon. Click the ID to check it, or use <strong>🔍 Search Amazon</strong> below.`;
+      ? `<strong>${linked}</strong> of ${n} have an Amazon ID from Open Library (listed first). Dimmed ones only have a guessed ID or none.`
+      : `None of these ${n} have an Amazon ID on Open Library. Each dimmed ID is guessed from that edition's ISBN, and Amazon doesn't sell every edition. Click an ID to check it, or use <strong>🔍 Search Amazon</strong> below.`;
   renderSearchResults(items, container, summary);
 }
 
@@ -1108,16 +1185,22 @@ function renderSearchResults(items, container, summaryHtml = '') {
     } else if (doc._source === 'amz') {
       const pick = amzPick(doc);
       const pubs = doc.publisher ?? [];
-      const meta = [
-        doc.first_publish_year ? `First published ${doc.first_publish_year}` : '',
-        pubs.length === 1 ? pubs[0] : pubs.length > 1 ? `${pubs.length} publishers` : '',
-      ].filter(Boolean).join(' · ');
+      const otherLangs = (doc._langs ?? []).filter(l => l !== 'eng').map(l => LANG_NAMES[l] ?? l);
+      const meta = doc._formOnly
+        ? 'From the ISBN field (Open Library has no record of it)'
+        : [
+            doc._fromForm ? 'Matches your ISBN' : '',
+            doc._format ? doc._format[0].toUpperCase() + doc._format.slice(1) : '',
+            pubs.length === 1 ? pubs[0] : pubs.length > 1 ? `${pubs.length} publishers` : '',
+            doc._edition ? (doc._date ?? '') : (doc.first_publish_year ? `First published ${doc.first_publish_year}` : ''),
+            otherLangs.join(', '),
+          ].filter(Boolean).join(' · ');
       const idLink = pick.id
         ? `<a href="https://www.amazon.com/dp/${encodeURIComponent(pick.id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Amazon to check it">${esc(pick.id)}</a>`
         : '';
       const idLine = pick.kind === 'kindle' ? `<div class="gb-idline has-id">✓ Kindle ASIN ${idLink}</div>`
                    : pick.kind === 'ol'     ? `<div class="gb-idline has-id">✓ Amazon ID ${idLink} (ISBN-10)</div>`
-                   : pick.kind === 'derived'? `<div class="gb-idline no-id-text">Guessed ID ${idLink} from ISBN ${esc(pick.isbn13)}. May not be on Amazon.</div>`
+                   : pick.kind === 'derived'? `<div class="gb-idline no-id-text">Guessed ID ${idLink} from ISBN ${esc(pick.from)}. May not be on Amazon.</div>`
                    :                          `<div class="gb-idline no-id-text">No Amazon ID or ISBN on Open Library</div>`;
       extraHtml = (meta ? `<div class="gb-meta">${esc(meta)}</div>` : '') + idLine;
     }
